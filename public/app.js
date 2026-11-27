@@ -25,6 +25,8 @@ let githubRepositories = [];
 let selectedGitPaths = new Set();
 let gitCommitPreview = null;
 let gitLoadSequence = 0;
+let settingsDirty = false;
+let settingsSaving = false;
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -60,6 +62,19 @@ const els = {
   fullComputerAccessBannerTitle: $('#fullComputerAccessBannerTitle'),
   credentialRule: $('#credentialRule'),
   appVersion: $('#appVersion'),
+  openSettingsBtn: $('#openSettingsBtn'),
+  settingsDialog: $('#settingsDialog'),
+  closeSettingsBtn: $('#closeSettingsBtn'),
+  arenaProfileName: $('#arenaProfileName'),
+  arenaProfilePronouns: $('#arenaProfilePronouns'),
+  arenaProfileAboutMe: $('#arenaProfileAboutMe'),
+  arenaGlobalInstructions: $('#arenaGlobalInstructions'),
+  autoLoadArenaChatToggle: $('#autoLoadArenaChatToggle'),
+  appearanceTheme: $('#appearanceTheme'),
+  compactLayoutToggle: $('#compactLayoutToggle'),
+  reduceMotionToggle: $('#reduceMotionToggle'),
+  saveSettingsBtn: $('#saveSettingsBtn'),
+  settingsSaveStatus: $('#settingsSaveStatus'),
   tunnelUrl: $('#tunnelUrl'),
   pairingHint: $('#pairingHint'),
   permissionMode: $('#permissionMode'),
@@ -333,6 +348,7 @@ let arenaChatReady = false;
 let arenaChatBusy = false;
 let arenaChatWatchdog = null;
 let arenaChatBoundsObserver = null;
+let arenaChatDialogObserver = null;
 let arenaChatBoundsFrame = 0;
 
 function setChatBadge(text, live = false) {
@@ -362,6 +378,11 @@ function observeArenaChatBounds() {
   window.addEventListener('resize', scheduleArenaChatBoundsUpdate, { passive: true });
   document.addEventListener('scroll', scheduleArenaChatBoundsUpdate, true);
   document.addEventListener('visibilitychange', scheduleArenaChatBoundsUpdate);
+  arenaChatDialogObserver?.disconnect();
+  if (typeof MutationObserver === 'function') {
+    arenaChatDialogObserver = new MutationObserver(scheduleArenaChatBoundsUpdate);
+    arenaChatDialogObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+  }
 }
 
 function beginArenaChatLoad() {
@@ -414,9 +435,9 @@ function handleArenaChatEvent(event) {
 function getArenaChatBounds() {
   if (!els.chatFrameWrap) return { x: 0, y: 0, width: 1, height: 1, visible: false };
   const frame = els.chatFrameWrap.getBoundingClientRect();
-  const visible = !document.hidden && frame.width > 0 && frame.height > 0
-    && frame.left >= 0 && frame.top >= 0
-    && frame.right <= window.innerWidth && frame.bottom <= window.innerHeight;
+  const visible = !document.hidden && !document.querySelector('dialog[open]') && frame.width > 0 && frame.height > 0
+    && frame.right > 0 && frame.bottom > 0
+    && frame.left < window.innerWidth && frame.top < window.innerHeight;
   if (!visible) return { x: 0, y: 0, width: 1, height: 1, visible: false };
   const inset = 1;
   return {
@@ -477,6 +498,70 @@ async function resetArenaChatSession() {
   }
 }
 
+function applyAppearancePreferences(preferences = {}) {
+  document.documentElement.dataset.appearance = preferences.theme === 'high-contrast' ? 'high-contrast' : 'arena';
+  document.documentElement.classList.toggle('compact-layout', preferences.compactLayout === true);
+  document.documentElement.classList.toggle('reduce-motion', preferences.reduceMotion === true);
+}
+
+function syncSettingsForm(state) {
+  if (settingsDirty) return;
+  const profile = state?.arenaPersonalization || {};
+  const appearance = state?.appearancePreferences || {};
+  els.arenaProfileName.value = profile.name || '';
+  els.arenaProfilePronouns.value = profile.pronouns || '';
+  els.arenaProfileAboutMe.value = profile.aboutMe || '';
+  els.arenaGlobalInstructions.value = profile.instructions || '';
+  els.autoLoadArenaChatToggle.checked = state?.arenaChatAutoLoad !== false;
+  els.appearanceTheme.value = appearance.theme === 'high-contrast' ? 'high-contrast' : 'arena';
+  els.compactLayoutToggle.checked = appearance.compactLayout === true;
+  els.reduceMotionToggle.checked = appearance.reduceMotion === true;
+  els.settingsSaveStatus.textContent = 'Profile, chat, and appearance save when you press Save. Integration and token controls save separately.';
+}
+
+function markSettingsDirty() {
+  settingsDirty = true;
+  els.settingsSaveStatus.textContent = 'Unsaved settings changes.';
+}
+
+async function saveArenaSettings() {
+  if (settingsSaving) return;
+  settingsSaving = true;
+  els.saveSettingsBtn.disabled = true;
+  els.settingsSaveStatus.textContent = 'Saving local settings…';
+  try {
+    const state = await window.arenaLocal.saveSettings({
+      arenaPersonalization: {
+        name: els.arenaProfileName.value,
+        pronouns: els.arenaProfilePronouns.value,
+        aboutMe: els.arenaProfileAboutMe.value,
+        instructions: els.arenaGlobalInstructions.value,
+      },
+      arenaChatAutoLoad: els.autoLoadArenaChatToggle.checked,
+      appearancePreferences: {
+        theme: els.appearanceTheme.value,
+        compactLayout: els.compactLayoutToggle.checked,
+        reduceMotion: els.reduceMotionToggle.checked,
+      },
+    });
+    settingsDirty = false;
+    applyState(state);
+    els.settingsSaveStatus.textContent = 'Saved on this computer.';
+    showToast('Settings saved locally.');
+    if (state.arenaChatAutoLoad && !arenaChatCreated) void loadArenaChat();
+  } catch (error) {
+    els.settingsSaveStatus.textContent = error.message || 'Could not save settings.';
+    showToast(error.message || 'Could not save settings.', true);
+  } finally {
+    settingsSaving = false;
+    els.saveSettingsBtn.disabled = false;
+  }
+}
+
+function openSettings() {
+  if (!els.settingsDialog.open) els.settingsDialog.showModal();
+}
+
 function applyState(state) {
   if (!state) return;
   const firstRender = !appState;
@@ -485,6 +570,8 @@ function applyState(state) {
   const localWorkspaceRoot = state.localWorkspaceRoot ?? state.workspaceRoot ?? null;
   const localWorkspaceChanged = previousWorkspace !== localWorkspaceRoot;
   appState = state;
+  syncSettingsForm(state);
+  applyAppearancePreferences(state.appearancePreferences);
   if (combinedUnlockChallengeId && (
     !state.fullComputerAccess
     || state.permissionMode !== combinedUnlockPermissionMode
@@ -679,7 +766,7 @@ function updateWebToolsPanel() {
   els.webToolsStatus.dataset.state = enabled ? 'enabled' : 'disabled';
   els.webToolsStatus.textContent = enabled
     ? 'Enabled locally · web_search uses DuckDuckGo, and web_scrape fetches public HTTPS pages. Requests are read-only and bounded.'
-    : 'Disabled locally · remote web actions are blocked until you enable this integration here.';
+    : 'Disabled locally · remote web actions are blocked until you enable this integration in Settings.';
 }
 
 function updateGitIntegrationPanel() {
@@ -696,14 +783,14 @@ function updateGitIntegrationPanel() {
     githubRepositories = [];
     selectedGitPaths.clear();
     if (els.githubRepositorySelect) els.githubRepositorySelect.replaceChildren(new Option('Git integration disabled', ''));
-    if (els.githubRepositoryStatus) els.githubRepositoryStatus.textContent = 'Enable Git integration to use GitHub repository controls.';
+    if (els.githubRepositoryStatus) els.githubRepositoryStatus.textContent = 'Enable Git in Settings to use GitHub repository controls.';
     els.gitStatusBadge.textContent = 'DISABLED';
     els.gitStatusBadge.dataset.state = 'disabled';
     els.gitBranchName.textContent = 'Git integration disabled';
     els.gitSummaryText.textContent = 'Local Git controls and remote Git actions are blocked.';
     els.gitCounts.hidden = true;
     els.gitRepositoryContent.hidden = true;
-    els.gitUnavailableText.textContent = 'Git integration is disabled locally. Enable it above to restore the local workbench and remote Git tools.';
+    els.gitUnavailableText.textContent = 'Git integration is disabled locally. Enable it in Settings to restore the local workbench and remote Git tools.';
     els.initializeGitBtn.hidden = true;
     els.gitUnavailable.hidden = false;
     els.refreshGitBtn.disabled = true;
@@ -2081,6 +2168,16 @@ async function chooseWorkspace() {
   }
 }
 
+els.openSettingsBtn.addEventListener('click', openSettings);
+els.closeSettingsBtn.addEventListener('click', () => els.settingsDialog.close());
+els.saveSettingsBtn.addEventListener('click', saveArenaSettings);
+for (const field of [els.arenaProfileName, els.arenaProfilePronouns, els.arenaProfileAboutMe, els.arenaGlobalInstructions]) {
+  field.addEventListener('input', markSettingsDirty);
+}
+for (const field of [els.autoLoadArenaChatToggle, els.appearanceTheme, els.compactLayoutToggle, els.reduceMotionToggle]) {
+  field.addEventListener('change', markSettingsDirty);
+}
+els.settingsDialog.addEventListener('close', scheduleArenaChatBoundsUpdate);
 $('#saveNgrokTokenBtn').addEventListener('click', saveNgrokToken);
 $('#startTunnelBtn').addEventListener('click', startTunnel);
 $('#cancelTunnelBtn').addEventListener('click', cancelTunnelStart);
@@ -2152,7 +2249,8 @@ for (const link of navigationItems) {
     event.preventDefault();
     const target = link.getAttribute('href');
     setChatFocusMode(target === '#chat');
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = document.documentElement.classList.contains('reduce-motion')
+      || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (target) document.querySelector(target)?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
     for (const item of navigationItems) {
       const active = item === link;
@@ -2183,6 +2281,7 @@ async function init() {
   try {
     appState = await window.arenaLocal.getState();
     applyState(appState);
+    if (appState.arenaChatAutoLoad !== false) void loadArenaChat();
     await loadFiles('.');
     window.arenaLocal.onState(applyState);
     completeSplashBoot();

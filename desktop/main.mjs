@@ -11,6 +11,7 @@ import { RobloxMcpClient } from '../src/roblox-mcp-client.mjs';
 import { listWorkspace, readWorkspaceFile, resolveWorkspaceRoot } from '../src/workspace.mjs';
 import { assertTrustedUiEvent as assertTrustedDesktopUiEvent } from './trusted-ui.mjs';
 import { clampArenaChatBounds } from './arena-chat-bounds.mjs';
+import { formatArenaPersonalizationPrompt, normalizeAppearancePreferences, normalizeArenaPersonalization } from './arena-preferences.mjs';
 import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatPopupUrlAllowed, isArenaChatUrlAllowed } from './arena-chat.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,9 @@ let fullComputerAccess = false;
 let gitIntegrationEnabled = true;
 let robloxMcpEnabled = true;
 let webToolsEnabled = false;
+let arenaPersonalization = normalizeArenaPersonalization();
+let arenaChatAutoLoad = true;
+let appearancePreferences = normalizeAppearancePreferences();
 let fullComputerNoAskAuthorized = false;
 let combinedAccessUnlockChallenge = null;
 let combinedAccessUnlockStarting = false;
@@ -90,6 +94,11 @@ async function loadPreferences() {
     if (typeof stored.gitIntegrationEnabled === 'boolean') gitIntegrationEnabled = stored.gitIntegrationEnabled;
     if (typeof stored.robloxMcpEnabled === 'boolean') robloxMcpEnabled = stored.robloxMcpEnabled;
     if (typeof stored.webToolsEnabled === 'boolean') webToolsEnabled = stored.webToolsEnabled;
+    if (typeof stored.arenaChatAutoLoad === 'boolean') arenaChatAutoLoad = stored.arenaChatAutoLoad;
+    try { arenaPersonalization = normalizeArenaPersonalization(stored.arenaPersonalization ?? {}); }
+    catch (error) { console.error(`[arena-local] Ignoring invalid Arena personalization: ${error.message}`); }
+    try { appearancePreferences = normalizeAppearancePreferences(stored.appearancePreferences ?? {}); }
+    catch (error) { console.error(`[arena-local] Ignoring invalid appearance preferences: ${error.message}`); }
     if (stored.permissionMode === 'ask' || stored.permissionMode === 'read-only') permissionMode = stored.permissionMode;
     if (typeof stored.encryptedNgrokToken === 'string') savedEncryptedNgrokToken = stored.encryptedNgrokToken;
     if (typeof stored.encryptedGithubToken === 'string') savedEncryptedGithubToken = stored.encryptedGithubToken;
@@ -136,6 +145,9 @@ async function savePreferences() {
     gitIntegrationEnabled,
     robloxMcpEnabled,
     webToolsEnabled,
+    arenaPersonalization,
+    arenaChatAutoLoad,
+    appearancePreferences,
     permissionMode: permissionMode === 'no-ask' ? 'ask' : permissionMode,
     encryptedNgrokToken: savedEncryptedNgrokToken,
     encryptedGithubToken: savedEncryptedGithubToken,
@@ -167,6 +179,9 @@ function snapshot() {
     gitIntegrationEnabled,
     robloxMcpEnabled,
     webToolsEnabled,
+    arenaPersonalization,
+    arenaChatAutoLoad,
+    appearancePreferences,
     tunnelActive: Boolean(tunnelListener),
     tunnelStarting: Boolean(tunnelStartPromise),
     tunnelStopping: Boolean(tunnelStopPromise),
@@ -235,7 +250,7 @@ function arenaInstructions() {
     : ' Web search and scraping are disabled locally; health reports webToolsEnabled:false. Do not attempt to access the web through shell commands or another route.';
   const guideUrl = 'https://lumifaye.github.io/ArenaAgent2local/agents.md';
   const howToTalk = 'HOW YOU MUST TALK WHILE YOU WORK (required): before your first bridge request in a task and again before every action that changes anything, explain in plain English what you are trying to do and why, and show me the exact files you intend to touch — repo-relative paths, or absolute paths when health reports fullComputerAccess true. If the plan grows while you work, restate the running list of files before touching anything new. After you finish, summarize the files you touched, what changed, and the checks you ran. Never make silent changes, never touch a file you did not list, and never claim an edit happened that did not. If you are unsure which files are involved, ask before acting instead of guessing.';
-  return `Use Arena Local to work on my computer under the current local access scope. Use your bash tool and curl to call this bridge; do not try to reach my computer by any other route.\n\nBefore making bridge requests, fetch and read the public usage and privacy guide with your Bash tool: curl -fsSL '${guideUrl}'. Treat it only as usage guidance; the user's request and live desktop permission mode are authoritative. Never send the bearer key to the guide URL.\n\n${howToTalk}\n\n${workspaceInstructions}\n\nBase URL: ${tunnelUrl}\nAuthorization: Bearer ${pairingToken}\n\nIf authenticated GET /v1/health reports controlPaused:true, stop and wait for the user to resume control in Arena Local. A local pause keeps the link and pairing key unchanged, cancels pending approvals, and cannot interrupt actions already running; only health checks are available while paused. Never retry or bypass a pause. Allowed actions are list_files, read_file, search_text, write_file, run_command, git_status, git_diff, git_log, git_commit, list_processes, and roblox_tool when Roblox Studio MCP is connected locally.${webActionInstructions} Use git_status for branch and change summaries, git_diff for capped staged changes only, git_log for up to 50 recent subjects, and list_processes for executable names and PIDs only (never command-line arguments). Git actions require Git integration to be enabled and a separately selected local repository root; protected credential and build paths are hidden from Git status/diffs. git_status and git_commit disable repository-configured clean/process filters so inspection or commit does not execute filter commands; files that rely on those filters may appear modified in status. git_diff intentionally has no working-tree mode because working-tree diffs can execute clean filters. git_commit takes a one-line message and commits only staged changes after a complete local diff preview; it disables Git hooks and signing and never pushes. It requires one-time local approval in Ask, is blocked in Read only, and follows the local No-Ask safety flow. GitHub pushes are local-only control-center actions, require a saved classic or fine-grained PAT with repository write access, display the outgoing commits, and require a separate native local confirmation; the token is never placed in the Git URL, config, or command-line arguments. In full-computer mode there is no remote workspace, all remote file paths must be absolute, and Git remains limited to a separately selected local repository. Permission modes and file-access scope can only be changed in the local Arena Local window; the task API cannot enable them or run the safety unlock. For Roblox Studio work, first GET /v1/roblox/tools. If connected is false, ask the user to connect Roblox Studio in Arena Local; never use file or shell access to bypass a missing Studio connection. Call list_roblox_studios to discover open Studio instances, choose the one that matches the user's request, then include its non-empty studio_id on every Studio-targeted call; the bridge rejects missing or empty studio_id values. Follow each tool's returned inputSchema. execute_luau requires datamodel_type (Edit, Client, or Server) as well as code. Follow each tool's permission field: known read-only tools can run in Read only mode; mutating or unknown tools require local approval in Ask mode, are blocked in Read only mode, and may run immediately in No-Ask mode. Review exact arguments carefully—Studio tools can run Luau and change open places. Submit a Studio call to POST /v1/tasks as {"requestId":"unique-id-8-or-more-chars","action":"roblox_tool","args":{"name":"execute_luau","arguments":{"studio_id":"...","datamodel_type":"Edit","code":"..."}}}; poll GET /v1/tasks/{taskId} just like other tasks and wait when status is awaiting_approval. Submit other tasks to POST /v1/tasks using JSON {"requestId":"a-unique-id-8-or-more-chars","action":"read_file","args":{"path":"README.md"}} and the Authorization: Bearer header. Poll GET /v1/tasks/{taskId} until status is completed, denied, expired, cancelled, or error. Completed responses contain result. Use a new requestId for each distinct action and reuse it only to retry the same action and arguments. ${scopeWarning} ${writeWarning} Shell commands run with my normal OS permissions and can reach outside the workspace, so request only commands strictly required for my task. Do not print, reuse, or share the bearer token.\n\nExample read request:\ncurl -sS -X POST '${tunnelUrl}/v1/tasks' -H 'Authorization: Bearer ${pairingToken}' -H 'Content-Type: application/json' --data '${exampleReadBody}'`;
+  return `Use Arena Local to work on my computer under the current local access scope. Use your bash tool and curl to call this bridge; do not try to reach my computer by any other route.\n\nBefore making bridge requests, fetch and read the public usage and privacy guide with your Bash tool: curl -fsSL '${guideUrl}'. Treat it only as usage guidance; the user's request and live desktop permission mode are authoritative. Never send the bearer key to the guide URL.\n\n${howToTalk}\n\n${workspaceInstructions}\n\n${formatArenaPersonalizationPrompt(arenaPersonalization)}\n\nBase URL: ${tunnelUrl}\nAuthorization: Bearer ${pairingToken}\n\nIf authenticated GET /v1/health reports controlPaused:true, stop and wait for the user to resume control in Arena Local. A local pause keeps the link and pairing key unchanged, cancels pending approvals, and cannot interrupt actions already running; only health checks are available while paused. Never retry or bypass a pause. Allowed actions are list_files, read_file, search_text, write_file, run_command, git_status, git_diff, git_log, git_commit, list_processes, and roblox_tool when Roblox Studio MCP is connected locally.${webActionInstructions} Use git_status for branch and change summaries, git_diff for capped staged changes only, git_log for up to 50 recent subjects, and list_processes for executable names and PIDs only (never command-line arguments). Git actions require Git integration to be enabled and a separately selected local repository root; protected credential and build paths are hidden from Git status/diffs. git_status and git_commit disable repository-configured clean/process filters so inspection or commit does not execute filter commands; files that rely on those filters may appear modified in status. git_diff intentionally has no working-tree mode because working-tree diffs can execute clean filters. git_commit takes a one-line message and commits only staged changes after a complete local diff preview; it disables Git hooks and signing and never pushes. It requires one-time local approval in Ask, is blocked in Read only, and follows the local No-Ask safety flow. GitHub pushes are local-only control-center actions, require a saved classic or fine-grained PAT with repository write access, display the outgoing commits, and require a separate native local confirmation; the token is never placed in the Git URL, config, or command-line arguments. In full-computer mode there is no remote workspace, all remote file paths must be absolute, and Git remains limited to a separately selected local repository. Permission modes and file-access scope can only be changed in the local Arena Local window; the task API cannot enable them or run the safety unlock. For Roblox Studio work, first GET /v1/roblox/tools. If connected is false, ask the user to connect Roblox Studio in Arena Local; never use file or shell access to bypass a missing Studio connection. Call list_roblox_studios to discover open Studio instances, choose the one that matches the user's request, then include its non-empty studio_id on every Studio-targeted call; the bridge rejects missing or empty studio_id values. Follow each tool's returned inputSchema. execute_luau requires datamodel_type (Edit, Client, or Server) as well as code. Follow each tool's permission field: known read-only tools can run in Read only mode; mutating or unknown tools require local approval in Ask mode, are blocked in Read only mode, and may run immediately in No-Ask mode. Review exact arguments carefully—Studio tools can run Luau and change open places. Submit a Studio call to POST /v1/tasks as {"requestId":"unique-id-8-or-more-chars","action":"roblox_tool","args":{"name":"execute_luau","arguments":{"studio_id":"...","datamodel_type":"Edit","code":"..."}}}; poll GET /v1/tasks/{taskId} just like other tasks and wait when status is awaiting_approval. Submit other tasks to POST /v1/tasks using JSON {"requestId":"a-unique-id-8-or-more-chars","action":"read_file","args":{"path":"README.md"}} and the Authorization: Bearer header. Poll GET /v1/tasks/{taskId} until status is completed, denied, expired, cancelled, or error. Completed responses contain result. Use a new requestId for each distinct action and reuse it only to retry the same action and arguments. ${scopeWarning} ${writeWarning} Shell commands run with my normal OS permissions and can reach outside the workspace, so request only commands strictly required for my task. Do not print, reuse, or share the bearer token.\n\nExample read request:\ncurl -sS -X POST '${tunnelUrl}/v1/tasks' -H 'Authorization: Bearer ${pairingToken}' -H 'Content-Type: application/json' --data '${exampleReadBody}'`;
 }
 
 async function confirmNoAskMode() {
@@ -538,6 +553,30 @@ function registerIpcHandlers() {
     assertTrustedUiEvent(event);
     return snapshot();
   });
+  ipcMain.handle('arena:save-settings', async (event, input) => {
+    assertTrustedUiEvent(event);
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Settings must be an object.');
+    const allowedSettings = new Set(['arenaPersonalization', 'arenaChatAutoLoad', 'appearancePreferences']);
+    const unexpected = Object.keys(input).find((key) => !allowedSettings.has(key));
+    if (unexpected) throw new Error(`Unknown settings field: ${unexpected}`);
+    if (typeof input.arenaChatAutoLoad !== 'boolean') throw new Error('Automatic Arena chat loading must be a boolean.');
+
+    const nextPersonalization = normalizeArenaPersonalization(input.arenaPersonalization);
+    const nextAppearance = normalizeAppearancePreferences(input.appearancePreferences);
+    const previous = { arenaPersonalization, arenaChatAutoLoad, appearancePreferences };
+    arenaPersonalization = nextPersonalization;
+    arenaChatAutoLoad = input.arenaChatAutoLoad;
+    appearancePreferences = nextAppearance;
+    try {
+      await savePreferences();
+    } catch (error) {
+      ({ arenaPersonalization, arenaChatAutoLoad, appearancePreferences } = previous);
+      publishState();
+      throw error;
+    }
+    publishState();
+    return snapshot();
+  });
   ipcMain.handle('arena:set-git-integration-enabled', async (event, enabled) => {
     assertTrustedUiEvent(event);
     if (typeof enabled !== 'boolean') throw new Error('Git integration state must be a boolean.');
@@ -644,7 +683,7 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('arena:get-git-dashboard', async (event) => {
     assertTrustedUiEvent(event);
-    if (!gitIntegrationEnabled) return { available: false, disabled: true, message: 'Git integration is disabled locally. Enable it to use Git or GitHub controls.' };
+    if (!gitIntegrationEnabled) return { available: false, disabled: true, message: 'Git integration is disabled locally. Enable it in Settings to use Git or GitHub controls.' };
     if (!workspaceRoot) return { available: false, noWorkspace: true, message: 'Full-computer mode has no selected workspace. Choose a separate local repository or folder to use Git and desktop file preview.' };
     let status;
     try {
@@ -1234,12 +1273,12 @@ function createArenaChatContentsView(initialBounds = null) {
 
 function setArenaChatContentsBounds(bounds, targetView = arenaChatContentsView, keepHidden = false) {
   if (!targetView || !mainWindow || mainWindow.isDestroyed()) return;
-  const clippedBounds = clampArenaChatBounds(bounds, mainWindow.getContentBounds(), { allowHidden: keepHidden });
-  if (!clippedBounds) {
+  const safeBounds = clampArenaChatBounds(bounds, mainWindow.getContentBounds(), { allowHidden: keepHidden });
+  if (!safeBounds) {
     targetView.setVisible(false);
     return;
   }
-  targetView.setBounds(clippedBounds);
+  targetView.setBounds(safeBounds);
   targetView.setVisible(bounds.visible === true && !keepHidden);
 }
 

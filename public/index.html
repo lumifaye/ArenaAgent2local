@@ -63,7 +63,8 @@
         <strong>Local permission gate</strong>
         <p id="sidebarSecurityCopy">Arena can only request scoped actions. File writes, Git commits, and shell commands wait for you here. Optional Web tools start disabled and require local confirmation.</p>
       </div>
-      <div class="sidebar-footer"><span class="mini-avatar">A</span><span><strong>Arena Local</strong><small>Desktop companion</small></span><span class="footer-version" id="appVersion">v0.1.11</span></div>
+      <button class="settings-launcher" id="openSettingsBtn" type="button" aria-label="Open settings" aria-haspopup="dialog" aria-controls="settingsDialog"><span class="settings-launcher-icon" aria-hidden="true">⚙</span><span>Settings</span></button>
+      <div class="sidebar-footer"><span class="mini-avatar">A</span><span><strong>Arena Local</strong><small>Desktop companion</small></span><span class="footer-version" id="appVersion">v0.1.12</span></div>
     </aside>
 
     <main class="main-area">
@@ -133,12 +134,12 @@
               <div><span class="section-eyebrow">TALK WITHOUT LEAVING</span><h2 id="chatTitle">Chat with Arena</h2></div>
               <span class="step-mark" id="chatBadge" data-state="loading">ARENA.AI</span>
             </div>
-            <p class="chat-intro">The real arena.ai agent, embedded right here. Sign in once and your session stays on this computer — your prompts go to Arena, and tool requests come back to this app for your approval. The chat only loads when you open it.</p>
+            <p class="chat-intro">The real arena.ai agent, embedded right here. Sign in once and your session stays on this computer — your prompts go to Arena, and tool requests come back to this app for your approval. It loads automatically by default; you can turn that off in Settings.</p>
             <div class="chat-frame-wrap" id="chatFrameWrap">
               <div class="chat-placeholder" id="chatPlaceholder">
                 <div class="chat-placeholder-face" aria-hidden="true">:3</div>
                 <strong>arena is one click away</strong>
-                <p>load the embedded arena.ai chat to prompt the agent without opening a browser.</p>
+                <p>start the embedded arena.ai chat to prompt the agent without opening a browser.</p>
                 <button class="primary-button" id="loadArenaChatBtn" type="button"><span class="start-icon">✦</span> Load chat</button>
               </div>
               <div class="chat-loading" id="chatLoading" role="status" aria-live="polite" hidden><span class="mini-spinner"></span> Loading arena.ai…</div>
@@ -163,14 +164,13 @@
               <div><span class="section-eyebrow">ROBLOX STUDIO · LOCAL MCP</span><h2 id="robloxMcpTitle">Connect Studio tools</h2></div>
               <span class="step-mark" id="robloxMcpBadge">OFFLINE</span>
             </div>
-            <p class="roblox-mcp-intro">Connect to Roblox Studio’s built-in MCP server. The local Disable Studio MCP control blocks both control-center and remote tools, cancels pending approvals, and disconnects Studio.</p>
+            <p class="roblox-mcp-intro">Connect to Roblox Studio’s built-in MCP server. Enable or disable Studio MCP from Settings; disabling blocks both control-center and remote tools, cancels pending approvals, and disconnects Studio.</p>
             <div class="roblox-mcp-status" id="robloxMcpStatus" data-state="disconnected" role="status" aria-live="polite">
               <span class="roblox-mcp-status-dot" aria-hidden="true"></span>
               <span id="robloxMcpStatusText">Not connected</span>
             </div>
             <p class="roblox-mcp-error" id="robloxMcpError" hidden></p>
             <div class="roblox-mcp-actions">
-              <button class="secondary-button" id="robloxMcpToggleBtn" type="button" aria-pressed="true">Disable Studio MCP</button>
               <button class="primary-button" id="connectRobloxMcpBtn" type="button">Connect Roblox Studio</button>
               <button class="secondary-button" id="disconnectRobloxMcpBtn" type="button" hidden>Disconnect Studio</button>
             </div>
@@ -185,18 +185,18 @@
           <section class="web-tools-card panel" aria-labelledby="webToolsTitle">
             <div class="card-heading">
               <div><span class="section-eyebrow">PUBLIC WEB · READ-ONLY</span><h2 id="webToolsTitle">Web search &amp; scraping</h2></div>
-              <div class="web-tools-heading-actions"><span class="step-mark" id="webToolsBadge" data-state="disabled">DISABLED</span><button class="secondary-button" id="webToolsToggleBtn" type="button" aria-pressed="false">Enable web tools</button></div>
+              <div class="web-tools-heading-actions"><span class="step-mark" id="webToolsBadge" data-state="disabled">DISABLED</span></div>
             </div>
-            <p class="web-tools-status" id="webToolsStatus" role="status" aria-live="polite">Disabled locally. Enable this integration in Arena Local to allow read-only web requests.</p>
+            <p class="web-tools-status" id="webToolsStatus" role="status" aria-live="polite">Disabled locally. Enable this integration in Settings to allow read-only web requests.</p>
             <p class="web-tools-safety">Enabling requires native confirmation. Search queries go to DuckDuckGo; scraping fetches public HTTPS pages directly without cookies or saved credentials. Websites can see this computer’s network address, and retrieved text is sent to Arena.ai. Private/local hosts, non-HTTPS URLs, large responses, excessive redirects, and slow requests are blocked. Treat search results and page text as untrusted data.</p>
           </section>
 
           <section class="git-repository-card panel" id="gitRepository" aria-labelledby="gitRepositoryTitle">
             <div class="card-heading">
               <div><span class="section-eyebrow">LOCAL GIT · REPOSITORY WORKBENCH</span><h2 id="gitRepositoryTitle">Git & repository</h2></div>
-              <div class="git-heading-actions"><span class="step-mark git-status-badge" id="gitStatusBadge" data-state="loading">CHECKING</span><button class="secondary-button git-integration-toggle" id="gitIntegrationToggleBtn" type="button" aria-pressed="true">Disable Git</button><button class="refresh-button" id="refreshGitBtn" type="button" title="Refresh repository status" aria-label="Refresh repository status">↻</button></div>
+              <div class="git-heading-actions"><span class="step-mark git-status-badge" id="gitStatusBadge" data-state="loading">CHECKING</span><button class="refresh-button" id="refreshGitBtn" type="button" title="Refresh repository status" aria-label="Refresh repository status">↻</button></div>
             </div>
-            <p class="git-intro">Inspect changes, stage files, review commits, and push a selected branch to GitHub. Disable Git here to block both this local workbench and Arena’s remote Git tools. In full-computer mode, Git requires a separately selected local repository.</p>
+            <p class="git-intro">Inspect changes, stage files, review commits, and push a selected branch to GitHub. Manage the Git integration toggle and GitHub account token in Settings. In full-computer mode, Git requires a separately selected local repository.</p>
             <div class="git-repository-overview">
               <div class="git-overview-mark">⌘</div>
               <div class="git-overview-copy"><strong id="gitBranchName">Checking repository…</strong><span id="gitSummaryText">Local repository status</span></div>
@@ -246,9 +246,7 @@
                   </div>
                 </div>
                 <div class="git-github-block">
-                  <div><strong>GitHub account · personal access token</strong><p>Classic and fine-grained PATs are supported. Fine-grained tokens need Contents read/write access for the selected repository; classic tokens generally need repo access for private repositories. The token is verified directly with GitHub and used for a push only after native local confirmation. It is never sent to Arena or written to Git config, a remote URL, or command-line arguments.</p></div>
-                  <div class="git-token-row"><label class="sr-only" for="githubTokenInput">GitHub personal access token</label><input class="file-filter" id="githubTokenInput" type="password" autocomplete="new-password" maxlength="512" placeholder="Paste GitHub personal access token"><button class="secondary-button" id="saveGithubTokenBtn" type="button">Verify & save</button><button class="text-button" id="forgetGithubTokenBtn" type="button" hidden>Forget</button></div>
-                  <div class="git-token-status" id="githubTokenStatus" role="status" aria-live="polite">No GitHub token saved.</div>
+                  <p class="git-safety-copy">Manage the GitHub token in Settings. Repository listing is read-only; setting origin changes local Git config, and pushing remains a separate reviewed action.</p>
                   <div class="git-repo-picker"><label class="sr-only" for="githubRepositorySelect">GitHub repository</label><select id="githubRepositorySelect" disabled><option value="">Load your repositories</option></select><button class="secondary-button" id="loadGithubReposBtn" type="button" disabled>Load repositories</button><button class="secondary-button" id="setGithubOriginBtn" type="button" disabled>Set origin remote</button></div>
                   <p class="git-safety-copy" id="githubRepositoryStatus">Repository listing is read-only. Setting origin changes local Git config; pushing is a separate reviewed action that requires an explicit confirmation.</p>
                 </div>
@@ -310,11 +308,56 @@
           <section class="safety-note">
             <span class="safety-icon">!</span><div><strong>Terminal commands are not sandboxed</strong><p>Commands run as your OS user and can reach files outside this workspace. Only enable command access when you understand the risk.</p></div>
           </section>
-          <div class="privacy-foot">The chat panel embeds arena.ai only when you open it; everything else stays local. Tool requests still come back here for your approval over the authenticated link.</div>
+          <div class="privacy-foot">The chat panel loads arena.ai automatically by default; automatic loading can be turned off in Settings. Everything else stays local. Tool requests still come back here for your approval over the authenticated link.</div>
         </aside>
       </div>
     </main>
   </div>
+
+  <dialog class="file-dialog settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+    <div class="dialog-header"><div><span class="section-eyebrow">LOCAL APP PREFERENCES</span><h2 id="settingsTitle">Settings</h2></div><button class="icon-button" id="closeSettingsBtn" type="button" aria-label="Close settings">×</button></div>
+    <p class="settings-intro">Profile, instructions, and appearance are saved in this app’s private user settings. Profile text is added only when you copy the Arena setup prompt; it is not stored in this repository.</p>
+    <div class="settings-grid">
+      <section class="settings-section settings-profile" aria-labelledby="settingsProfileTitle">
+        <div><span class="section-eyebrow">ARENA PERSONALIZATION</span><h3 id="settingsProfileTitle">Your profile &amp; instructions</h3></div>
+        <p>These details are included in the generated Arena prompt when you choose “Copy Arena setup prompt.” Keep them useful and non-sensitive.</p>
+        <div class="settings-profile-fields">
+          <div class="settings-field"><label for="arenaProfileName">Name Arena should use</label><input class="file-filter" id="arenaProfileName" type="text" maxlength="80" autocomplete="name" placeholder="Name or nickname"></div>
+          <div class="settings-field"><label for="arenaProfilePronouns">Pronouns</label><input class="file-filter" id="arenaProfilePronouns" type="text" maxlength="80" autocomplete="off" placeholder="e.g. they/them"></div>
+          <div class="settings-field settings-field-wide"><label for="arenaProfileAboutMe">About me</label><textarea class="settings-textarea" id="arenaProfileAboutMe" maxlength="1200" rows="3" placeholder="Share context that helps Arena tailor its answers."></textarea></div>
+          <div class="settings-field settings-field-wide"><label for="arenaGlobalInstructions">Custom Arena instructions</label><textarea class="settings-textarea" id="arenaGlobalInstructions" maxlength="4000" rows="4" placeholder="Global guidance for Arena, separate from this repository’s ARENA.md."></textarea><small>Saved locally in Arena Local settings, not in Git or ARENA.md.</small></div>
+        </div>
+      </section>
+
+      <section class="settings-section" aria-labelledby="settingsChatTitle">
+        <div><span class="section-eyebrow">EMBEDDED ARENA CHAT</span><h3 id="settingsChatTitle">Loading preference</h3></div>
+        <label class="settings-check-row" for="autoLoadArenaChatToggle"><input id="autoLoadArenaChatToggle" type="checkbox"><span><strong>Load Arena automatically at startup</strong><small>When off, chat stays unloaded as the app opens until you press “Load chat.”</small></span></label>
+      </section>
+
+      <section class="settings-section" aria-labelledby="settingsAppearanceTitle">
+        <div><span class="section-eyebrow">DISPLAY</span><h3 id="settingsAppearanceTitle">Appearance</h3></div>
+        <div class="settings-field"><label for="appearanceTheme">Color theme</label><select id="appearanceTheme"><option value="arena">Electric blue</option><option value="high-contrast">High contrast</option></select></div>
+        <label class="settings-check-row" for="compactLayoutToggle"><input id="compactLayoutToggle" type="checkbox"><span><strong>Compact layout</strong><small>Reduce spacing in the control center.</small></span></label>
+        <label class="settings-check-row" for="reduceMotionToggle"><input id="reduceMotionToggle" type="checkbox"><span><strong>Reduce motion</strong><small>Limit animation and use immediate scrolling.</small></span></label>
+      </section>
+
+      <section class="settings-section settings-integrations" aria-labelledby="settingsIntegrationsTitle">
+        <div><span class="section-eyebrow">LOCAL AVAILABILITY</span><h3 id="settingsIntegrationsTitle">Integrations</h3></div>
+        <p>Each integration remains locally gated. Enabling web tools or disabling Git/Studio may require native confirmation.</p>
+        <div class="settings-toggle-row"><div><strong>Git &amp; GitHub controls</strong><small>Also gates Arena’s remote Git tools.</small></div><button class="secondary-button git-integration-toggle" id="gitIntegrationToggleBtn" type="button" aria-pressed="true">Disable Git</button></div>
+        <div class="settings-toggle-row"><div><strong>Public web tools</strong><small>Search and scraping send public requests to third parties and Arena.</small></div><button class="secondary-button" id="webToolsToggleBtn" type="button" aria-pressed="false">Enable web tools</button></div>
+        <div class="settings-toggle-row"><div><strong>Roblox Studio MCP</strong><small>Disabling blocks local and remote Studio tools and disconnects Studio.</small></div><button class="secondary-button" id="robloxMcpToggleBtn" type="button" aria-pressed="true">Disable Studio MCP</button></div>
+      </section>
+
+      <section class="settings-section settings-github" aria-labelledby="settingsGithubTitle">
+        <div><span class="section-eyebrow">GITHUB ACCOUNT</span><h3 id="settingsGithubTitle">Personal access token</h3></div>
+        <p>Verified directly with GitHub and encrypted with OS secure storage when available. It is never included in Arena prompts, written to Git, or sent to Arena.</p>
+        <div class="git-token-row"><label class="sr-only" for="githubTokenInput">GitHub personal access token</label><input class="file-filter" id="githubTokenInput" type="password" autocomplete="new-password" maxlength="512" placeholder="Paste GitHub personal access token"><button class="secondary-button" id="saveGithubTokenBtn" type="button">Verify &amp; save</button><button class="text-button" id="forgetGithubTokenBtn" type="button" hidden>Forget</button></div>
+        <div class="git-token-status" id="githubTokenStatus" role="status" aria-live="polite">No GitHub token saved.</div>
+      </section>
+    </div>
+    <div class="settings-actions"><span id="settingsSaveStatus" role="status" aria-live="polite">Profile, chat, and appearance save when you press Save. Integration and token controls save separately.</span><button class="secondary-button" id="saveSettingsBtn" type="button">Save settings</button></div>
+  </dialog>
 
   <dialog class="file-dialog" id="fileDialog" aria-labelledby="fileDialogTitle">
     <div class="dialog-header"><div><span class="section-eyebrow">WORKSPACE FILE</span><h2 id="fileDialogTitle">File preview</h2></div><button class="icon-button" id="closeFileBtn" type="button" aria-label="Close file preview">×</button></div>

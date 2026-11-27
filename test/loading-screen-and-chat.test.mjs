@@ -39,7 +39,7 @@ test('embedded chat permits only HTTPS Arena and sign-in provider URLs', () => {
   assert.equal(isArenaChatPopupUrlAllowed('javascript:alert(1)'), false, 'Blank-popup support must not allow script URLs.');
 });
 
-test('native chat bounds are visible-only, finite, and clipped to the BrowserWindow content area', () => {
+test('native chat bounds preserve the full DOM rectangle during window-edge scrolling', () => {
   const content = { width: 500, height: 300 };
   assert.deepEqual(
     clampArenaChatBounds({ x: 20, y: 30, width: 400, height: 200, visible: true }, content),
@@ -47,13 +47,14 @@ test('native chat bounds are visible-only, finite, and clipped to the BrowserWin
   );
   assert.deepEqual(
     clampArenaChatBounds({ x: -10, y: 5, width: 100, height: 60, visible: true }, content),
-    { x: 0, y: 5, width: 90, height: 60 },
-    'Partially out-of-window rectangles should be clipped rather than shifted or allowed to escape.',
+    { x: -10, y: 5, width: 100, height: 60 },
+    'A partially visible view must retain its full size so Arena does not reflow while the page scrolls.',
   );
   assert.deepEqual(
     clampArenaChatBounds({ x: 480, y: 280, width: 50, height: 40, visible: true }, content),
-    { x: 480, y: 280, width: 20, height: 20 },
+    { x: 480, y: 280, width: 50, height: 40 },
   );
+  assert.equal(clampArenaChatBounds({ x: -520, y: 0, width: 20, height: 10, visible: true }, content), null);
   assert.equal(clampArenaChatBounds({ x: 0, y: 0, width: 10, height: 10, visible: false }, content), null);
   assert.deepEqual(
     clampArenaChatBounds({ x: 0, y: 0, width: 1, height: 1, visible: false }, content, { allowHidden: true }),
@@ -61,6 +62,7 @@ test('native chat bounds are visible-only, finite, and clipped to the BrowserWin
   );
   assert.equal(clampArenaChatBounds({ x: Number.NaN, y: 0, width: 10, height: 10, visible: true }, content), null);
   assert.equal(clampArenaChatBounds({ x: 0, y: 0, width: 0, height: 10, visible: true }, content), null);
+  assert.equal(clampArenaChatBounds({ x: 0, y: 0, width: 5_000, height: 10, visible: true }, content), null);
 });
 
 test('loading screen shows the lowercase "arena local :3" wordmark and live AI ask summary', () => {
@@ -84,9 +86,12 @@ test('control center pins a live "what the ai is asking to do" banner with file 
   assert.match(desktopAppJs, /renderLiveAsk\(state\);/);
 });
 
-test('embedded arena.ai chat uses a main-process sized secure view and retryable focus layout', () => {
+test('embedded arena.ai chat auto-loads by default with a manual-load preference and smooth viewport bounds', () => {
   assert.ok(desktopUi.includes('id="chat"'), 'Desktop UI should expose a chat section.');
-  assert.ok(desktopUi.includes('id="loadArenaChatBtn"'), 'Chat panel should start behind an explicit load action.');
+  assert.ok(desktopUi.includes('id="loadArenaChatBtn"'), 'Chat panel should retain a manual load action when auto-load is disabled.');
+  assert.ok(desktopUi.includes('id="autoLoadArenaChatToggle"'), 'Settings should allow automatic chat loading to be disabled.');
+  assert.ok(desktopUi.includes('id="openSettingsBtn"'), 'Settings should be reachable from the sidebar.');
+  assert.ok(desktopUi.includes('id="settingsDialog"'), 'The Settings entry should open an in-app settings screen.');
   assert.ok(desktopUi.includes('id="retryArenaChatBtn"'), 'A failed chat load should expose a retry action.');
   assert.ok(desktopUi.includes('id="toggleChatFocusBtn"'), 'Chat should have a control to expand it beyond the side panels.');
   assert.match(desktopAppJs, /function setChatFocusMode\(focused\)/);
@@ -102,12 +107,25 @@ test('embedded arena.ai chat uses a main-process sized secure view and retryable
   assert.match(desktopAppJs, /window\.arenaLocal\.setArenaChatBounds\(/);
   assert.match(desktopAppJs, /new ResizeObserver\(scheduleArenaChatBoundsUpdate\)/);
   assert.match(desktopAppJs, /window\.arenaLocal\.onArenaChatEvent\(handleArenaChatEvent\)/);
-  assert.match(desktopAppJs, /frame\.bottom <= window\.innerHeight/);
+  assert.match(desktopAppJs, /frame\.right > 0 && frame\.bottom > 0/);
+  assert.match(desktopAppJs, /frame\.left < window\.innerWidth && frame\.top < window\.innerHeight/);
+  assert.match(desktopAppJs, /if \(appState\.arenaChatAutoLoad !== false\) void loadArenaChat\(\)/);
+  assert.match(desktopAppJs, /document\.querySelector\('dialog\[open\]'\)/);
   assert.match(desktopAppJs, /function failArenaChat\(/);
   assert.match(desktopAppJs, /retryArenaChatBtn\?\.addEventListener\('click', \(\) => reloadArenaChat\(\)\)/);
   assert.doesNotMatch(desktopAppJs, /function observeChatVisibility\(/, 'Chat must not start downloading just because it scrolled into view.');
   assert.ok(desktopUi.includes('id="chatFallback"'), 'Chat panel should degrade gracefully when arena.ai cannot load.');
   assert.ok(desktopUi.includes("object-src 'none'"), 'Local UI objects remain blocked because Arena is rendered in a native view.');
+  for (const id of ['arenaProfileName', 'arenaProfilePronouns', 'arenaProfileAboutMe', 'arenaGlobalInstructions', 'appearanceTheme', 'compactLayoutToggle', 'reduceMotionToggle', 'gitIntegrationToggleBtn', 'webToolsToggleBtn', 'robloxMcpToggleBtn', 'githubTokenInput', 'saveGithubTokenBtn', 'forgetGithubTokenBtn']) {
+    assert.ok(desktopUi.includes(`id="${id}"`), `Settings should expose ${id}.`);
+  }
+  assert.match(desktopAppJs, /window\.arenaLocal\.saveSettings\(/);
+  assert.match(desktopMain, /path\.join\(app\.getPath\('userData'\), 'config\.json'\)/);
+  assert.match(desktopMain, /arenaPersonalization,/);
+  assert.match(desktopMain, /appearancePreferences,/);
+  assert.match(desktopMain, /encryptedGithubToken: savedEncryptedGithubToken/);
+  assert.match(desktopPreload, /saveSettings: invoke\('arena:save-settings'\)/);
+  assert.match(desktopMain, /formatArenaPersonalizationPrompt\(arenaPersonalization\)/);
   assert.match(desktopPreload, /loadArenaChat: invoke\('arena:load-arena-chat'\)/);
   assert.match(desktopPreload, /reloadArenaChat: invoke\('arena:reload-arena-chat'\)/);
   assert.match(desktopPreload, /setArenaChatBounds: send\('arena:set-arena-chat-bounds'\)/);

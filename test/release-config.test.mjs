@@ -78,6 +78,18 @@ test('updates page shows release publication dates and links to versioned instal
   }
 });
 
+test('next changelog entry is marked unreleased and has no premature download link', () => {
+  assert.equal(packageJson.version, '0.1.12');
+  const start = changelogPage.indexOf('<section class="page-section" aria-label="Unreleased version 0.1.12 notes">');
+  assert.notEqual(start, -1);
+  const end = changelogPage.indexOf('</section>', start);
+  const entry = changelogPage.slice(start, end);
+  assert.ok(entry.includes('<small>UNRELEASED</small>'));
+  assert.doesNotMatch(entry, /releases\/download\/v0\.1\.12/);
+  assert.ok(entry.includes('Settings'));
+  assert.ok(entry.includes('local app user-data settings'));
+});
+
 test('copied Arena prompt fetches the public guide without exposing the pairing key', () => {
   const guideUrl = 'https://lumifaye.github.io/ArenaAgent2local/agents.md';
   assert.ok(desktopMain.includes(`const guideUrl = '${guideUrl}'`));
@@ -192,7 +204,8 @@ test('Git and GitHub workbench keeps credentials local and preserves staged-only
   assert.match(desktopAppJs, /setRobloxMcpEnabled\(enabled\)/);
   assert.match(desktopAppJs, /async function pushGitBranch\(\)/);
   assert.match(desktopUi, /Review &amp; push branch to GitHub/);
-  assert.match(desktopUi, /Disable Git here to block both this local workbench and Arena’s remote Git tools/);
+  assert.match(desktopUi, /Manage the Git integration toggle and GitHub account token in Settings/);
+  assert.match(desktopUi, /<section class="settings-section settings-integrations"/);
   assert.ok(agentGuide.includes('check the selected repository root for `ARENA.md`'));
   assert.ok(agentGuide.includes('there is no push action in the remote task API'));
   assert.ok(agentGuide.includes('a separately selected local folder in full-computer mode'));

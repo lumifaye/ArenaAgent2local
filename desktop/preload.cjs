@@ -5,6 +5,7 @@ const send = (channel) => (...args) => ipcRenderer.send(channel, ...args);
 
 contextBridge.exposeInMainWorld('arenaLocal', {
   getState: invoke('arena:get-state'),
+  saveSettings: invoke('arena:save-settings'),
   listFiles: invoke('arena:list-files'),
   readFile: invoke('arena:read-file'),
   getGitDashboard: invoke('arena:get-git-dashboard'),
