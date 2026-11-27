@@ -18,3 +18,9 @@ export function isArenaChatUrlAllowed(rawUrl) {
     return false;
   }
 }
+
+// OAuth providers often create an about:blank window before navigating it to the
+// provider. Permit only that initial empty document; navigation remains allowlisted.
+export function isArenaChatPopupUrlAllowed(rawUrl) {
+  return String(rawUrl) === 'about:blank' || isArenaChatUrlAllowed(rawUrl);
+}

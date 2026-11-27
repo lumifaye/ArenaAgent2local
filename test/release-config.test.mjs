@@ -56,7 +56,8 @@ test('desktop app element registry covers all references and matches the HTML', 
 
 test('updates page shows release publication dates and links to versioned installer downloads', () => {
   const releaseDates = {
-    '0.1.10': 'NOV 25, 2026 UTC',
+    '0.1.11': 'NOV 25, 2026 UTC',
+    '0.1.10': 'NOV 27, 2026 UTC',
     '0.1.8': 'NOV 27, 2026 UTC',
     '0.1.7': 'NOV 26, 2026 UTC',
     '0.1.6': 'NOV 26, 2026 UTC',

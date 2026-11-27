@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatUrlAllowed } from '../desktop/arena-chat.mjs';
+import { clampArenaChatBounds } from '../desktop/arena-chat-bounds.mjs';
+import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatPopupUrlAllowed, isArenaChatUrlAllowed } from '../desktop/arena-chat.mjs';
 
 const desktopUi = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const desktopTheme = await readFile(new URL('../public/desktop-theme.css', import.meta.url), 'utf8');
@@ -29,9 +30,37 @@ test('embedded chat permits only HTTPS Arena and sign-in provider URLs', () => {
     'https://arena.ai:8443/',
     'file:///etc/passwd',
     'javascript:alert(1)',
+    'about:blank',
   ]) {
-    assert.equal(isArenaChatUrlAllowed(url), false, `${url} should be blocked.`);
+    assert.equal(isArenaChatUrlAllowed(url), false, `${url} should be blocked for navigation.`);
   }
+  assert.equal(isArenaChatPopupUrlAllowed('about:blank'), true, 'OAuth may open one empty popup before navigating to an allowlisted provider.');
+  assert.equal(isArenaChatPopupUrlAllowed('about:blank#unsafe'), false, 'Only the exact initial empty document should be allowed.');
+  assert.equal(isArenaChatPopupUrlAllowed('javascript:alert(1)'), false, 'Blank-popup support must not allow script URLs.');
+});
+
+test('native chat bounds are visible-only, finite, and clipped to the BrowserWindow content area', () => {
+  const content = { width: 500, height: 300 };
+  assert.deepEqual(
+    clampArenaChatBounds({ x: 20, y: 30, width: 400, height: 200, visible: true }, content),
+    { x: 20, y: 30, width: 400, height: 200 },
+  );
+  assert.deepEqual(
+    clampArenaChatBounds({ x: -10, y: 5, width: 100, height: 60, visible: true }, content),
+    { x: 0, y: 5, width: 90, height: 60 },
+    'Partially out-of-window rectangles should be clipped rather than shifted or allowed to escape.',
+  );
+  assert.deepEqual(
+    clampArenaChatBounds({ x: 480, y: 280, width: 50, height: 40, visible: true }, content),
+    { x: 480, y: 280, width: 20, height: 20 },
+  );
+  assert.equal(clampArenaChatBounds({ x: 0, y: 0, width: 10, height: 10, visible: false }, content), null);
+  assert.deepEqual(
+    clampArenaChatBounds({ x: 0, y: 0, width: 1, height: 1, visible: false }, content, { allowHidden: true }),
+    { x: 0, y: 0, width: 1, height: 1 },
+  );
+  assert.equal(clampArenaChatBounds({ x: Number.NaN, y: 0, width: 10, height: 10, visible: true }, content), null);
+  assert.equal(clampArenaChatBounds({ x: 0, y: 0, width: 0, height: 10, visible: true }, content), null);
 });
 
 test('loading screen shows the lowercase "arena local :3" wordmark and live AI ask summary', () => {
@@ -55,7 +84,7 @@ test('control center pins a live "what the ai is asking to do" banner with file 
   assert.match(desktopAppJs, /renderLiveAsk\(state\);/);
 });
 
-test('embedded arena.ai chat is click-to-load, securely isolated, and retryable after errors', () => {
+test('embedded arena.ai chat uses a main-process sized secure view and retryable focus layout', () => {
   assert.ok(desktopUi.includes('id="chat"'), 'Desktop UI should expose a chat section.');
   assert.ok(desktopUi.includes('id="loadArenaChatBtn"'), 'Chat panel should start behind an explicit load action.');
   assert.ok(desktopUi.includes('id="retryArenaChatBtn"'), 'A failed chat load should expose a retry action.');
@@ -66,33 +95,54 @@ test('embedded arena.ai chat is click-to-load, securely isolated, and retryable 
   assert.match(desktopTheme, /\.desktop-shell\.chat-focus-mode \.content-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);\s*\}/);
   assert.match(desktopTheme, /\.desktop-shell\.chat-focus-mode \.inspector\s*\{\s*display:\s*none;\s*\}/);
   assert.match(desktopTheme, /height:\s*clamp\(500px,\s*72vh,\s*900px\)/);
-  assert.match(desktopAppJs, /document\.createElement\('webview'\)/);
-  assert.match(desktopAppJs, /persist:arena-chat/);
-  assert.match(desktopAppJs, /https:\/\/arena\.ai\//);
+  assert.doesNotMatch(desktopAppJs, /document\.createElement\('webview'\)/, 'Use a native WebContentsView instead of the legacy webview element.');
   assert.match(desktopAppJs, /function loadArenaChat\(/);
   assert.match(desktopAppJs, /function reloadArenaChat\(/);
-  assert.match(desktopAppJs, /function syncArenaChatBounds\(/);
-  assert.match(desktopAppJs, /function observeArenaChatBounds\(/);
-  assert.match(desktopAppJs, /new ResizeObserver\(\(\) => syncArenaChatBounds\(view\)\)/);
-  assert.match(desktopAppJs, /addEventListener\('did-attach'/);
-  assert.match(desktopAppJs, /els\.chatFrameWrap\.clientHeight/);
-  assert.match(desktopAppJs, /els\.chatFrameWrap\.clientHeight \+ 1/, 'A one-pixel initial height delta should force Electron to resize the attached guest.');
+  assert.match(desktopAppJs, /function scheduleArenaChatBoundsUpdate\(/);
+  assert.match(desktopAppJs, /window\.arenaLocal\.setArenaChatBounds\(/);
+  assert.match(desktopAppJs, /new ResizeObserver\(scheduleArenaChatBoundsUpdate\)/);
+  assert.match(desktopAppJs, /window\.arenaLocal\.onArenaChatEvent\(handleArenaChatEvent\)/);
+  assert.match(desktopAppJs, /frame\.bottom <= window\.innerHeight/);
   assert.match(desktopAppJs, /function failArenaChat\(/);
   assert.match(desktopAppJs, /retryArenaChatBtn\?\.addEventListener\('click', \(\) => reloadArenaChat\(\)\)/);
   assert.doesNotMatch(desktopAppJs, /function observeChatVisibility\(/, 'Chat must not start downloading just because it scrolled into view.');
-  assert.match(desktopAppJs, /setAttribute\('allowpopups', ''\)/);
   assert.ok(desktopUi.includes('id="chatFallback"'), 'Chat panel should degrade gracefully when arena.ai cannot load.');
-  assert.ok(desktopUi.includes('frame-src https://arena.ai'), 'Local CSP must allow the dedicated Arena chat guest.');
-  assert.match(desktopPreload, /openArenaChat: invoke\('arena:open-arena-chat'\)/);
-  assert.match(desktopPreload, /resetArenaChat: invoke\('arena:reset-arena-chat'\)/);
-  assert.match(desktopMain, /webviewTag: true/);
-  assert.match(desktopMain, /arena:open-arena-chat/);
-  assert.match(desktopMain, /arena:reset-arena-chat/);
-  assert.match(desktopMain, /will-attach-webview/);
+  assert.ok(desktopUi.includes("object-src 'none'"), 'Local UI objects remain blocked because Arena is rendered in a native view.');
+  assert.match(desktopPreload, /loadArenaChat: invoke\('arena:load-arena-chat'\)/);
+  assert.match(desktopPreload, /reloadArenaChat: invoke\('arena:reload-arena-chat'\)/);
+  assert.match(desktopPreload, /setArenaChatBounds: send\('arena:set-arena-chat-bounds'\)/);
+  assert.match(desktopPreload, /onArenaChatEvent\(callback\)/);
+  assert.match(desktopMain, /new WebContentsView\(/);
+  assert.match(desktopMain, /partition: ARENA_CHAT_PARTITION/);
+  assert.match(desktopMain, /view\.setBounds\(\{ x: 0, y: 0, width: 1, height: 1 \}\)/);
+  assert.match(desktopMain, /if \(initialBounds\) setArenaChatContentsBounds\(initialBounds, view, true\)/);
+  assert.match(desktopMain, /clampArenaChatBounds\(bounds, mainWindow\.getContentBounds\(\), \{ allowHidden: keepHidden \}\)/);
+  assert.match(desktopMain, /targetView\.setVisible\(bounds\.visible === true && !keepHidden\)/);
+  assert.match(desktopMain, /view\.getVisible\(\)/);
+  assert.doesNotMatch(desktopMain, /\.isVisible\(\)/, 'Use the Electron View API getVisible().');
+  const ipcHandlerSection = desktopMain.slice(desktopMain.indexOf('function registerIpcHandlers'), desktopMain.indexOf('function arenaChatPopupOptions'));
+  assert.doesNotMatch(ipcHandlerSection, /mainWindow\.on\('resize'/, 'Window events should only be wired after BrowserWindow creation.');
+  assert.match(desktopMain, /function createWindow\(\) \{[\s\S]*?mainWindow = new BrowserWindow\([\s\S]*?mainWindow\.on\('resize'/);
+  assert.match(desktopMain, /arena:load-arena-chat/);
+  assert.match(desktopMain, /arena:reload-arena-chat/);
+  assert.match(desktopMain, /arena:set-arena-chat-bounds/);
+  assert.match(desktopMain, /arena:chat-event/);
   assert.match(desktopMain, /will-navigate/);
   assert.match(desktopMain, /will-redirect/);
   assert.match(desktopMain, /did-create-window/);
+  assert.match(desktopMain, /parent: mainWindow/);
+  const popupOptions = desktopMain.slice(desktopMain.indexOf('function arenaChatPopupOptions'), desktopMain.indexOf('function sendArenaChatEvent'));
+  assert.match(popupOptions, /partition: ARENA_CHAT_PARTITION/);
+  assert.match(popupOptions, /contextIsolation: true/);
+  assert.match(popupOptions, /nodeIntegration: false/);
+  assert.match(popupOptions, /sandbox: true/);
+  assert.match(desktopMain, /if \(!isArenaChatPopupUrlAllowed\(url\)\) return \{ action: 'deny' \}/);
+  assert.match(desktopMain, /isArenaChatPopupUrlAllowed/);
   assert.match(desktopMain, /isArenaChatUrlAllowed/);
+  assert.match(desktopMain, /webviewTag: false/);
+  assert.doesNotMatch(desktopMain, /will-attach-webview/);
+  assert.match(desktopMain, /arena:open-arena-chat/);
+  assert.match(desktopMain, /arena:reset-arena-chat/);
 });
 
 test('agent instructions require explaining intended changes and listing touched files', () => {

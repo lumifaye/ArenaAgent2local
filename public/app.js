@@ -328,11 +328,12 @@ function completeSplashBoot() {
 }
 
 // --- embedded arena.ai chat ---
-const ARENA_CHAT_URL = 'https://arena.ai/';
-let arenaChatView = null;
+let arenaChatCreated = false;
+let arenaChatReady = false;
 let arenaChatBusy = false;
 let arenaChatWatchdog = null;
-let arenaChatResizeObserver = null;
+let arenaChatBoundsObserver = null;
+let arenaChatBoundsFrame = 0;
 
 function setChatBadge(text, live = false) {
   if (!els.chatBadge) return;
@@ -340,113 +341,119 @@ function setChatBadge(text, live = false) {
   els.chatBadge.classList.toggle('chat-badge-live', live);
 }
 
+function scheduleArenaChatBoundsUpdate() {
+  if (!els.chatFrameWrap || arenaChatBoundsFrame) return;
+  arenaChatBoundsFrame = requestAnimationFrame(() => {
+    arenaChatBoundsFrame = 0;
+    const bounds = arenaChatCreated && arenaChatReady
+      ? getArenaChatBounds()
+      : { x: 0, y: 0, width: 1, height: 1, visible: false };
+    window.arenaLocal.setArenaChatBounds(bounds);
+  });
+}
+
+function observeArenaChatBounds() {
+  if (!els.chatFrameWrap) return;
+  arenaChatBoundsObserver?.disconnect();
+  if (typeof ResizeObserver === 'function') {
+    arenaChatBoundsObserver = new ResizeObserver(scheduleArenaChatBoundsUpdate);
+    arenaChatBoundsObserver.observe(els.chatFrameWrap);
+  }
+  window.addEventListener('resize', scheduleArenaChatBoundsUpdate, { passive: true });
+  document.addEventListener('scroll', scheduleArenaChatBoundsUpdate, true);
+  document.addEventListener('visibilitychange', scheduleArenaChatBoundsUpdate);
+}
+
 function beginArenaChatLoad() {
   arenaChatBusy = true;
+  arenaChatReady = false;
   if (els.chatPlaceholder) els.chatPlaceholder.hidden = true;
   if (els.chatFallback) els.chatFallback.hidden = true;
   if (els.chatLoading) els.chatLoading.hidden = false;
   if (els.reloadArenaChatBtn) els.reloadArenaChatBtn.disabled = true;
   setChatBadge('LOADING…');
+  scheduleArenaChatBoundsUpdate();
   clearTimeout(arenaChatWatchdog);
   arenaChatWatchdog = setTimeout(() => {
     failArenaChat('arena.ai is taking too long to respond. Check your connection, then retry the embedded chat or open it in your browser.');
-  }, 15_000);
+  }, 20_000);
 }
 
 function failArenaChat(message) {
   arenaChatBusy = false;
+  arenaChatReady = false;
   clearTimeout(arenaChatWatchdog);
   if (els.chatLoading) els.chatLoading.hidden = true;
   if (els.chatFallback) els.chatFallback.hidden = false;
   if (els.chatFallbackCopy) els.chatFallbackCopy.textContent = message;
-  if (els.reloadArenaChatBtn) els.reloadArenaChatBtn.disabled = !arenaChatView;
+  if (els.reloadArenaChatBtn) els.reloadArenaChatBtn.disabled = !arenaChatCreated;
   setChatBadge('OFFLINE');
+  scheduleArenaChatBoundsUpdate();
 }
 
-function completeArenaChatLoad(view) {
-  if (view !== arenaChatView) return;
+function completeArenaChatLoad() {
+  arenaChatCreated = true;
+  arenaChatReady = true;
   arenaChatBusy = false;
   clearTimeout(arenaChatWatchdog);
   if (els.chatLoading) els.chatLoading.hidden = true;
   if (els.chatFallback) els.chatFallback.hidden = true;
   if (els.reloadArenaChatBtn) els.reloadArenaChatBtn.disabled = false;
   setChatBadge('LIVE', true);
+  scheduleArenaChatBoundsUpdate();
 }
 
-function syncArenaChatBounds(view) {
-  if (view !== arenaChatView || !els.chatFrameWrap) return;
-  const width = els.chatFrameWrap.clientWidth;
-  const height = els.chatFrameWrap.clientHeight;
-  if (width <= 0 || height <= 0) return;
-  view.style.width = `${width}px`;
-  view.style.height = `${height}px`;
-}
-
-function observeArenaChatBounds(view) {
-  arenaChatResizeObserver?.disconnect();
-  if (typeof ResizeObserver === 'function') {
-    arenaChatResizeObserver = new ResizeObserver(() => syncArenaChatBounds(view));
-    arenaChatResizeObserver.observe(els.chatFrameWrap);
+function handleArenaChatEvent(event) {
+  if (event?.type === 'loaded') completeArenaChatLoad();
+  else if (event?.type === 'failed') {
+    arenaChatCreated = true;
+    failArenaChat(event.message || 'arena.ai could not load. Retry the embedded chat or open it in your browser.');
   }
-  requestAnimationFrame(() => syncArenaChatBounds(view));
 }
 
-function attachArenaChatEvents(view) {
-  view.addEventListener('did-attach', () => {
-    requestAnimationFrame(() => syncArenaChatBounds(view));
-  }, { once: true });
-  view.addEventListener('dom-ready', () => completeArenaChatLoad(view));
-  view.addEventListener('did-fail-load', (event) => {
-    if (view !== arenaChatView || event.isMainFrame === false || event.errorCode === -3) return;
-    failArenaChat(`arena.ai could not load (${event.errorDescription || 'network error'}). Check your connection, then retry or open the chat in your browser.`);
-  });
-  view.addEventListener('render-process-gone', () => {
-    if (view === arenaChatView) failArenaChat('The embedded arena.ai window stopped unexpectedly. Retry the chat or open it in your browser.');
-  });
+function getArenaChatBounds() {
+  if (!els.chatFrameWrap) return { x: 0, y: 0, width: 1, height: 1, visible: false };
+  const frame = els.chatFrameWrap.getBoundingClientRect();
+  const visible = !document.hidden && frame.width > 0 && frame.height > 0
+    && frame.left >= 0 && frame.top >= 0
+    && frame.right <= window.innerWidth && frame.bottom <= window.innerHeight;
+  if (!visible) return { x: 0, y: 0, width: 1, height: 1, visible: false };
+  const inset = 1;
+  return {
+    x: Math.round(frame.left + inset),
+    y: Math.round(frame.top + inset),
+    width: Math.max(1, Math.round(frame.width - inset * 2)),
+    height: Math.max(1, Math.round(frame.height - inset * 2)),
+    visible: true,
+  };
 }
 
-function loadArenaChat() {
+async function loadArenaChat() {
   if (arenaChatBusy) return;
-  if (arenaChatView) {
-    reloadArenaChat();
+  if (arenaChatCreated) {
+    await reloadArenaChat();
     return;
   }
   if (!els.chatFrameWrap) return;
   beginArenaChatLoad();
-  let view;
   try {
-    view = document.createElement('webview');
-    if (typeof view.reload !== 'function') throw new Error('Embedded chat is not supported by this desktop build.');
-    view.id = 'arenaChatView';
-    view.className = 'arena-chat-view';
-    // Electron can attach a dynamically-created webview at its default 300x150
-    // bounds. Prime explicit frame dimensions, with a 1px height delta so the
-    // post-attach sync forces a real guest resize without a tiny initial viewport.
-    view.style.width = `${Math.max(1, els.chatFrameWrap.clientWidth)}px`;
-    view.style.height = `${Math.max(2, els.chatFrameWrap.clientHeight + 1)}px`;
-    view.setAttribute('partition', 'persist:arena-chat');
-    view.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=yes');
-    view.setAttribute('allowpopups', '');
-    view.setAttribute('src', ARENA_CHAT_URL);
-    attachArenaChatEvents(view);
-    arenaChatView = view;
-    els.chatFrameWrap.append(view);
-    observeArenaChatBounds(view);
+    await window.arenaLocal.loadArenaChat(getArenaChatBounds());
+    arenaChatCreated = true;
+    scheduleArenaChatBoundsUpdate();
   } catch (error) {
-    if (view === arenaChatView) arenaChatView = null;
     failArenaChat(error.message || 'The embedded chat could not be started.');
   }
 }
 
-function reloadArenaChat(force = false) {
-  if (!arenaChatView) {
-    loadArenaChat();
+async function reloadArenaChat(force = false) {
+  if (!arenaChatCreated) {
+    await loadArenaChat();
     return;
   }
   if (arenaChatBusy && !force) return;
   beginArenaChatLoad();
   try {
-    arenaChatView.reload();
+    await window.arenaLocal.reloadArenaChat();
   } catch (error) {
     failArenaChat(error.message || 'The embedded chat could not be reloaded.');
   }
@@ -463,7 +470,7 @@ async function openArenaChatInBrowser() {
 async function resetArenaChatSession() {
   try {
     await window.arenaLocal.resetArenaChat();
-    if (arenaChatView) reloadArenaChat(true);
+    if (arenaChatCreated) await reloadArenaChat(true);
     showToast('Arena sign-in cleared on this device.');
   } catch (error) {
     showToast(error.message || 'Could not reset the chat session.', true);
@@ -2137,6 +2144,7 @@ function setChatFocusMode(focused) {
     els.toggleChatFocusBtn.textContent = isFocused ? 'Restore panels' : 'Expand chat';
     els.toggleChatFocusBtn.setAttribute('aria-pressed', String(isFocused));
   }
+  scheduleArenaChatBoundsUpdate();
 }
 
 for (const link of navigationItems) {
@@ -2156,6 +2164,8 @@ for (const link of navigationItems) {
 }
 
 function registerChatHandlers() {
+  window.arenaLocal.onArenaChatEvent(handleArenaChatEvent);
+  observeArenaChatBounds();
   els.loadArenaChatBtn?.addEventListener('click', loadArenaChat);
   els.toggleChatFocusBtn?.addEventListener('click', () => {
     setChatFocusMode(!desktopShell?.classList.contains('chat-focus-mode'));

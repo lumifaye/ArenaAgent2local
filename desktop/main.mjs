@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, clipboard, dialog, ipcMain, safeStorage, session, shell } from 'electron';
+import { app, BrowserWindow, Notification, WebContentsView, clipboard, dialog, ipcMain, safeStorage, session, shell } from 'electron';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
@@ -10,7 +10,8 @@ import { listGithubRepositories, normalizeGithubToken, verifyGithubToken } from 
 import { RobloxMcpClient } from '../src/roblox-mcp-client.mjs';
 import { listWorkspace, readWorkspaceFile, resolveWorkspaceRoot } from '../src/workspace.mjs';
 import { assertTrustedUiEvent as assertTrustedDesktopUiEvent } from './trusted-ui.mjs';
-import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatUrlAllowed } from './arena-chat.mjs';
+import { clampArenaChatBounds } from './arena-chat-bounds.mjs';
+import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatPopupUrlAllowed, isArenaChatUrlAllowed } from './arena-chat.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UI_ENTRY_PATH = path.resolve(HERE, '..', 'public', 'index.html');
@@ -21,6 +22,7 @@ const FULL_NO_ASK_CHALLENGE_TTL_MS = 3 * 60_000;
 const FULL_NO_ASK_WAIT_NS = BigInt(FULL_NO_ASK_WAIT_MS) * 1_000_000n;
 const FULL_NO_ASK_CHALLENGE_TTL_NS = BigInt(FULL_NO_ASK_CHALLENGE_TTL_MS) * 1_000_000n;
 let mainWindow = null;
+let arenaChatContentsView = null;
 let api = null;
 let robloxMcp = null;
 let apiPort = null;
@@ -949,6 +951,21 @@ function registerIpcHandlers() {
     await chatSession.clearCache().catch(() => {});
     return { reset: true };
   });
+  ipcMain.handle('arena:load-arena-chat', (event, initialBounds) => {
+    assertTrustedUiEvent(event);
+    createArenaChatContentsView(initialBounds);
+    return { loaded: true };
+  });
+  ipcMain.handle('arena:reload-arena-chat', (event) => {
+    assertTrustedUiEvent(event);
+    const view = createArenaChatContentsView();
+    view.webContents.reload();
+    return { reloading: true };
+  });
+  ipcMain.on('arena:set-arena-chat-bounds', (event, bounds) => {
+    try { assertTrustedUiEvent(event); } catch { return; }
+    setArenaChatContentsBounds(bounds);
+  });
   ipcMain.handle('arena:set-full-computer-access', async (event, enabled) => {
     assertTrustedUiEvent(event);
     if (typeof enabled !== 'boolean') throw new Error('Full-computer access must be enabled or disabled.');
@@ -1111,19 +1128,18 @@ function registerIpcHandlers() {
   });
 }
 
-function restrictArenaChatNavigation(contents) {
-  const blockDisallowedUrl = (event, targetUrl) => {
-    if (!isArenaChatUrlAllowed(targetUrl)) event.preventDefault();
-  };
-  contents.on('will-navigate', blockDisallowedUrl);
-  contents.on('will-redirect', blockDisallowedUrl);
-}
-
 function arenaChatPopupOptions() {
   return {
-    width: 680,
-    height: 760,
+    parent: mainWindow,
+    center: true,
+    show: true,
+    width: 520,
+    height: 700,
+    minWidth: 420,
+    minHeight: 500,
     autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    title: 'Sign in to Arena',
     webPreferences: {
       partition: ARENA_CHAT_PARTITION,
       contextIsolation: true,
@@ -1138,30 +1154,96 @@ function arenaChatPopupOptions() {
   };
 }
 
+function sendArenaChatEvent(type, message = '') {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  mainWindow.webContents.send('arena:chat-event', { type, message });
+}
+
 function guardArenaChatWindowContents(contents) {
-  restrictArenaChatNavigation(contents);
+  contents.on('will-navigate', (event, targetUrl) => {
+    if (!isArenaChatUrlAllowed(targetUrl)) event.preventDefault();
+  });
+  contents.on('will-redirect', (event, targetUrl) => {
+    if (!isArenaChatUrlAllowed(targetUrl)) event.preventDefault();
+  });
   contents.setWindowOpenHandler(({ url }) => {
-    if (!isArenaChatUrlAllowed(url)) return { action: 'deny' };
+    // Google OAuth commonly opens an empty popup, then navigates it to accounts.google.com.
+    if (!isArenaChatPopupUrlAllowed(url)) return { action: 'deny' };
     return { action: 'allow', overrideBrowserWindowOptions: arenaChatPopupOptions() };
   });
   contents.on('did-create-window', (childWindow, details) => {
     childWindow.setMenuBarVisibility(false);
-    if (!isArenaChatUrlAllowed(details.url)) {
+    if (!isArenaChatPopupUrlAllowed(details.url)) {
       childWindow.close();
       return;
     }
+    childWindow.center();
+    childWindow.show();
+    childWindow.focus();
     guardArenaChatWindowContents(childWindow.webContents);
   });
 }
 
-function createWindow() {
-  app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() !== 'webview') return;
-    // Keep Arena isolated, constrain all guest navigations, and let only
-    // allowlisted sign-in popups open in a separate sandboxed window.
-    guardArenaChatWindowContents(contents);
-    contents.on('will-attach-webview', (event) => event.preventDefault());
+function createArenaChatContentsView(initialBounds = null) {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Arena Local is not ready to display the embedded chat.');
+  if (arenaChatContentsView) {
+    if (!arenaChatContentsView.webContents.isDestroyed()) {
+      if (initialBounds) setArenaChatContentsBounds(initialBounds, arenaChatContentsView, true);
+      return arenaChatContentsView;
+    }
+    mainWindow.contentView.removeChildView(arenaChatContentsView);
+    arenaChatContentsView = null;
+  }
+
+  const view = new WebContentsView({
+    webPreferences: {
+      partition: ARENA_CHAT_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInWorker: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+    },
   });
+  view.setBackgroundColor('#0b1120');
+  view.setBorderRadius(4);
+  view.setBounds({ x: 0, y: 0, width: 1, height: 1 });
+  view.setVisible(false);
+  mainWindow.contentView.addChildView(view);
+  arenaChatContentsView = view;
+  if (initialBounds) setArenaChatContentsBounds(initialBounds, view, true);
+
+  const contents = view.webContents;
+  guardArenaChatWindowContents(contents);
+  contents.on('did-finish-load', () => sendArenaChatEvent('loaded'));
+  contents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3) return;
+    sendArenaChatEvent('failed', errorDescription || 'Network error');
+  });
+  contents.on('render-process-gone', (_event, details) => {
+    sendArenaChatEvent('failed', `The chat renderer stopped (${details.reason}).`);
+  });
+  void contents.loadURL(ARENA_CHAT_URL).catch((error) => {
+    if (error?.code !== 'ERR_ABORTED') sendArenaChatEvent('failed', error.message || 'The chat could not be loaded.');
+  });
+  return view;
+}
+
+function setArenaChatContentsBounds(bounds, targetView = arenaChatContentsView, keepHidden = false) {
+  if (!targetView || !mainWindow || mainWindow.isDestroyed()) return;
+  const clippedBounds = clampArenaChatBounds(bounds, mainWindow.getContentBounds(), { allowHidden: keepHidden });
+  if (!clippedBounds) {
+    targetView.setVisible(false);
+    return;
+  }
+  targetView.setBounds(clippedBounds);
+  targetView.setVisible(bounds.visible === true && !keepHidden);
+}
+
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1360,
     height: 940,
@@ -1177,33 +1259,29 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      webviewTag: true,
+      webviewTag: false,
     },
   });
   mainWindow.removeMenu();
+  mainWindow.on('resize', () => {
+    const view = arenaChatContentsView;
+    if (!view) return;
+    const bounds = view.getBounds();
+    setArenaChatContentsBounds({ ...bounds, visible: view.getVisible() }, view);
+  });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
-  mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    if (params.partition !== ARENA_CHAT_PARTITION || !isArenaChatUrlAllowed(params.src)) {
-      event.preventDefault();
-      return;
-    }
-    delete webPreferences.preload;
-    webPreferences.nodeIntegration = false;
-    webPreferences.nodeIntegrationInSubFrames = false;
-    webPreferences.nodeIntegrationInWorker = false;
-    webPreferences.contextIsolation = true;
-    webPreferences.sandbox = true;
-    webPreferences.webSecurity = true;
-    webPreferences.allowRunningInsecureContent = false;
-    webPreferences.webviewTag = false;
-    params.allowpopups = '';
-  });
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     publishState();
   });
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', () => {
+    if (arenaChatContentsView && !arenaChatContentsView.webContents.isDestroyed()) {
+      arenaChatContentsView.webContents.close();
+    }
+    arenaChatContentsView = null;
+    mainWindow = null;
+  });
   mainWindow.loadFile(path.join(HERE, '..', 'public', 'index.html'));
 }
 

@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const invoke = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
+const send = (channel) => (...args) => ipcRenderer.send(channel, ...args);
 
 contextBridge.exposeInMainWorld('arenaLocal', {
   getState: invoke('arena:get-state'),
@@ -40,6 +41,15 @@ contextBridge.exposeInMainWorld('arenaLocal', {
   approveTask: invoke('arena:approve-task'),
   openArenaChat: invoke('arena:open-arena-chat'),
   resetArenaChat: invoke('arena:reset-arena-chat'),
+  loadArenaChat: invoke('arena:load-arena-chat'),
+  reloadArenaChat: invoke('arena:reload-arena-chat'),
+  setArenaChatBounds: send('arena:set-arena-chat-bounds'),
+  onArenaChatEvent(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('arena:chat-event', listener);
+    return () => ipcRenderer.removeListener('arena:chat-event', listener);
+  },
   onState(callback) {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, state) => callback(state);
