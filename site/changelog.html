@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102a66">
-  <meta name="description" content="Arena Local v0.1.12 adds local profile and instruction settings, automatic chat loading, and appearance preferences.">
+  <meta name="description" content="Arena Local v0.1.13 adds a /btw shortcut for direct Arena chat and routes public page fetching through Arena Local web tools.">
   <meta property="og:title" content="Updates — Arena Local">
-  <meta property="og:description" content="See what's new in Arena Local v0.1.12, with release notes and direct Windows installer downloads.">
+  <meta property="og:description" content="See what's new in Arena Local v0.1.13, with release notes and direct Windows installer downloads.">
   <title>Updates // Arena Local</title>
   <link rel="canonical" href="https://lumifaye.github.io/ArenaAgent2local/changelog.html">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
@@ -28,8 +28,16 @@
       <main id="main" class="subpage-main">
         <p class="breadcrumb"><a href="./">Home</a><span aria-hidden="true">/</span> Updates</p>
         <section class="page-hero page-hero-compact" aria-labelledby="page-title">
-          <div><p class="eyebrow">RELEASE NOTES / NOVEMBER 27, 2026 UTC</p><h1 id="page-title">Talks back.<br><span>Release notes, ready to install.</span></h1><p>Version 0.1.12 adds local Arena settings for profile details and custom instructions, automatic chat loading, and appearance and integration preferences. Published entries show their release dates and include direct Windows installer downloads.</p><div class="hero-inline-links"><a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.12/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.12 Windows installer">Download v0.1.12 <span aria-hidden="true">↓</span></a><a class="quiet-link" href="https://github.com/lumifaye/ArenaAgent2local/releases/tag/v0.1.12" target="_blank" rel="noopener noreferrer">Open the release ↗</a></div></div>
-          <div class="release-badge"><span>ARENA LOCAL</span><strong>0.1.12</strong><small>DESKTOP UPDATE<br>WINDOWS X64</small></div>
+          <div><p class="eyebrow">RELEASE NOTES / NOVEMBER 27, 2026 UTC</p><h1 id="page-title">Talks back.<br><span>Release notes, ready to install.</span></h1><p>Version 0.1.13 lets you type <code>/btw</code> and press Enter in Arena chat to open a separate direct-chat window, and directs public page fetching through Arena Local web tools. Published entries show their release dates and include direct Windows installer downloads.</p><div class="hero-inline-links"><a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.13/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.13 Windows installer">Download v0.1.13 <span aria-hidden="true">↓</span></a><a class="quiet-link" href="https://github.com/lumifaye/ArenaAgent2local/releases/tag/v0.1.13" target="_blank" rel="noopener noreferrer">Open the release ↗</a></div></div>
+          <div class="release-badge"><span>ARENA LOCAL</span><strong>0.1.13</strong><small>DESKTOP UPDATE<br>WINDOWS X64</small></div>
+        </section>
+
+        <section class="page-section" aria-label="Version 0.1.13 release notes">
+          <article class="changelog-entry"><div class="changelog-marker"><span>0.1.13</span><small>NOV 27, 2026 UTC</small></div><div class="changelog-content">
+            <div class="change-group"><span class="change-label change-added">ADDED</span><ul><li>Type <code>/btw</code> and press Enter in the embedded Arena chat composer to open a separate sandboxed window at <code>https://arena.ai/chat/direct?model_a=claude-sonnet-5-5-high</code>. The command is cleared instead of being submitted, and the new window shares the persistent Arena sign-in session.</li></ul></div>
+            <div class="change-group"><span class="change-label change-tuned">TUNED</span><ul><li>Direct public web searches and page fetches through Arena Local's <code>web_search</code> and <code>web_scrape</code> actions; do not fall back to assistant-side browsing when local tools are disabled or fail.</li></ul></div>
+            <a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.13/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.13 Windows installer">Download v0.1.13 installer <span aria-hidden="true">↓</span></a>
+          </div></article>
         </section>
 
         <section class="page-section" aria-label="Version 0.1.12 release notes">

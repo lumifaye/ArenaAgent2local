@@ -56,6 +56,7 @@ test('desktop app element registry covers all references and matches the HTML', 
 
 test('updates page shows release publication dates and links to versioned installer downloads', () => {
   const releaseDates = {
+    '0.1.13': 'NOV 27, 2026 UTC',
     '0.1.12': 'NOV 27, 2026 UTC',
     '0.1.11': 'NOV 27, 2026 UTC',
     '0.1.10': 'NOV 27, 2026 UTC',
@@ -80,16 +81,17 @@ test('updates page shows release publication dates and links to versioned instal
 });
 
 test('current changelog entry is marked released and links to its installer', () => {
-  assert.equal(packageJson.version, '0.1.12');
-  const start = changelogPage.indexOf('<section class="page-section" aria-label="Version 0.1.12 release notes">');
+  assert.equal(packageJson.version, '0.1.13');
+  const start = changelogPage.indexOf('<section class="page-section" aria-label="Version 0.1.13 release notes">');
   assert.notEqual(start, -1);
   const end = changelogPage.indexOf('</section>', start);
   const entry = changelogPage.slice(start, end);
   assert.ok(entry.includes('<small>NOV 27, 2026 UTC</small>'));
-  assert.ok(entry.includes('https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.12/Arena-Local-Setup.exe'));
+  assert.ok(entry.includes('https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.13/Arena-Local-Setup.exe'));
   assert.doesNotMatch(entry, /UNRELEASED/);
-  assert.ok(entry.includes('Settings'));
-  assert.ok(entry.includes('local app user-data settings'));
+  assert.ok(entry.includes('/btw'));
+  assert.ok(entry.includes('web_scrape'));
+  assert.ok(entry.includes('persistent Arena sign-in session'));
 });
 
 test('copied Arena prompt fetches the public guide without exposing the pairing key', () => {
@@ -135,6 +137,11 @@ test('public web search and scraping are locally opt-in, bounded to public HTTPS
   assert.match(agentGuide, /`webToolsEnabled: true`/);
   assert.match(agentGuide, /untrusted data/);
   assert.match(agentGuide, /sends the query to DuckDuckGo/);
+  assert.match(desktopMain, /use only the Arena Local bridge actions `web_search` and `web_scrape`/);
+  assert.match(desktopMain, /Do not use your own browser, assistant-side web search, web_fetch, scraper/);
+  assert.match(desktopMain, /ask the user to enable Web tools in Settings or continue without web research/);
+  assert.match(agentGuide, /For any page fetch, use the local `web_scrape` action/);
+  assert.match(agentGuide, /never fall back to an assistant-side web tool/);
 });
 
 test('full-computer access is opt-in and temporary; combining with No-Ask requires a local timed unlock', () => {

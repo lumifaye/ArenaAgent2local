@@ -2,17 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { clampArenaChatBounds } from '../desktop/arena-chat-bounds.mjs';
-import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatPopupUrlAllowed, isArenaChatUrlAllowed } from '../desktop/arena-chat.mjs';
+import { ARENA_BTW_CHAT_URL, ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatPageUrlAllowed, isArenaChatPopupUrlAllowed, isArenaChatUrlAllowed } from '../desktop/arena-chat.mjs';
 
 const desktopUi = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const desktopTheme = await readFile(new URL('../public/desktop-theme.css', import.meta.url), 'utf8');
 const desktopAppJs = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const desktopMain = await readFile(new URL('../desktop/main.mjs', import.meta.url), 'utf8');
 const desktopPreload = await readFile(new URL('../desktop/preload.cjs', import.meta.url), 'utf8');
+const arenaChatPreload = await readFile(new URL('../desktop/arena-chat-preload.cjs', import.meta.url), 'utf8');
 const agentGuide = (await readFile(new URL('../site/agents.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('embedded chat permits only HTTPS Arena and sign-in provider URLs', () => {
   assert.equal(ARENA_CHAT_URL, 'https://arena.ai/');
+  assert.equal(ARENA_BTW_CHAT_URL, 'https://arena.ai/chat/direct?model_a=claude-sonnet-5-5-high');
+  assert.equal(isArenaChatUrlAllowed(ARENA_BTW_CHAT_URL), true);
+  assert.equal(isArenaChatPageUrlAllowed(ARENA_BTW_CHAT_URL), true);
+  assert.equal(isArenaChatPageUrlAllowed('https://accounts.google.com/o/oauth2/'), false);
   assert.equal(ARENA_CHAT_PARTITION, 'persist:arena-chat');
   for (const url of [
     'https://arena.ai/',
@@ -37,6 +42,30 @@ test('embedded chat permits only HTTPS Arena and sign-in provider URLs', () => {
   assert.equal(isArenaChatPopupUrlAllowed('about:blank'), true, 'OAuth may open one empty popup before navigating to an allowlisted provider.');
   assert.equal(isArenaChatPopupUrlAllowed('about:blank#unsafe'), false, 'Only the exact initial empty document should be allowed.');
   assert.equal(isArenaChatPopupUrlAllowed('javascript:alert(1)'), false, 'Blank-popup support must not allow script URLs.');
+});
+
+test('/btw consumes the chat composer command and opens a secure direct Arena window', () => {
+  assert.match(arenaChatPreload, /event\.key !== 'Enter'/);
+  assert.match(arenaChatPreload, /getComposerText\(composer\)\.trim\(\) !== '\/btw'/);
+  assert.match(arenaChatPreload, /event\.isTrusted/);
+  assert.match(arenaChatPreload, /event\.preventDefault\(\)/);
+  assert.match(arenaChatPreload, /event\.stopImmediatePropagation\(\)/);
+  assert.match(arenaChatPreload, /clearComposer\(composer\)/);
+  assert.match(arenaChatPreload, /ipcRenderer\.send\('arena:open-btw-window'\)/);
+  assert.match(desktopMain, /preload: path\.join\(HERE, 'arena-chat-preload\.cjs'\)/);
+  assert.match(desktopMain, /ipcMain\.on\('arena:open-btw-window'/);
+  assert.match(desktopMain, /isTrustedArenaChatEvent\(event\)/);
+  assert.match(desktopMain, /return isArenaChatPageUrlAllowed\(/);
+  assert.match(desktopMain, /btwWindow\.loadURL\(ARENA_BTW_CHAT_URL\)/);
+
+  const btwWindowOptions = desktopMain.slice(desktopMain.indexOf('function arenaBtwWindowOptions'), desktopMain.indexOf('function openArenaBtwWindow'));
+  assert.match(btwWindowOptions, /parent: mainWindow/);
+  assert.match(btwWindowOptions, /partition: ARENA_CHAT_PARTITION/);
+  assert.match(btwWindowOptions, /contextIsolation: true/);
+  assert.match(btwWindowOptions, /nodeIntegration: false/);
+  assert.match(btwWindowOptions, /sandbox: true/);
+  assert.match(btwWindowOptions, /webSecurity: true/);
+  assert.doesNotMatch(btwWindowOptions, /preload:/, 'The direct-chat window should not gain the embedded chat command bridge.');
 });
 
 test('native chat bounds preserve the full DOM rectangle during window-edge scrolling', () => {
