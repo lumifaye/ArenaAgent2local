@@ -56,6 +56,7 @@ test('desktop app element registry covers all references and matches the HTML', 
 
 test('updates page shows release publication dates and links to versioned installer downloads', () => {
   const releaseDates = {
+    '0.1.12': 'NOV 27, 2026 UTC',
     '0.1.11': 'NOV 27, 2026 UTC',
     '0.1.10': 'NOV 27, 2026 UTC',
     '0.1.8': 'NOV 27, 2026 UTC',
@@ -78,14 +79,15 @@ test('updates page shows release publication dates and links to versioned instal
   }
 });
 
-test('next changelog entry is marked unreleased and has no premature download link', () => {
+test('current changelog entry is marked released and links to its installer', () => {
   assert.equal(packageJson.version, '0.1.12');
-  const start = changelogPage.indexOf('<section class="page-section" aria-label="Unreleased version 0.1.12 notes">');
+  const start = changelogPage.indexOf('<section class="page-section" aria-label="Version 0.1.12 release notes">');
   assert.notEqual(start, -1);
   const end = changelogPage.indexOf('</section>', start);
   const entry = changelogPage.slice(start, end);
-  assert.ok(entry.includes('<small>UNRELEASED</small>'));
-  assert.doesNotMatch(entry, /releases\/download\/v0\.1\.12/);
+  assert.ok(entry.includes('<small>NOV 27, 2026 UTC</small>'));
+  assert.ok(entry.includes('https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.12/Arena-Local-Setup.exe'));
+  assert.doesNotMatch(entry, /UNRELEASED/);
   assert.ok(entry.includes('Settings'));
   assert.ok(entry.includes('local app user-data settings'));
 });
