@@ -332,6 +332,7 @@ const ARENA_CHAT_URL = 'https://arena.ai/';
 let arenaChatView = null;
 let arenaChatBusy = false;
 let arenaChatWatchdog = null;
+let arenaChatResizeObserver = null;
 
 function setChatBadge(text, live = false) {
   if (!els.chatBadge) return;
@@ -372,7 +373,28 @@ function completeArenaChatLoad(view) {
   setChatBadge('LIVE', true);
 }
 
+function syncArenaChatBounds(view) {
+  if (view !== arenaChatView || !els.chatFrameWrap) return;
+  const width = els.chatFrameWrap.clientWidth;
+  const height = els.chatFrameWrap.clientHeight;
+  if (width <= 0 || height <= 0) return;
+  view.style.width = `${width}px`;
+  view.style.height = `${height}px`;
+}
+
+function observeArenaChatBounds(view) {
+  arenaChatResizeObserver?.disconnect();
+  if (typeof ResizeObserver === 'function') {
+    arenaChatResizeObserver = new ResizeObserver(() => syncArenaChatBounds(view));
+    arenaChatResizeObserver.observe(els.chatFrameWrap);
+  }
+  requestAnimationFrame(() => syncArenaChatBounds(view));
+}
+
 function attachArenaChatEvents(view) {
+  view.addEventListener('did-attach', () => {
+    requestAnimationFrame(() => syncArenaChatBounds(view));
+  }, { once: true });
   view.addEventListener('dom-ready', () => completeArenaChatLoad(view));
   view.addEventListener('did-fail-load', (event) => {
     if (view !== arenaChatView || event.isMainFrame === false || event.errorCode === -3) return;
@@ -397,6 +419,11 @@ function loadArenaChat() {
     if (typeof view.reload !== 'function') throw new Error('Embedded chat is not supported by this desktop build.');
     view.id = 'arenaChatView';
     view.className = 'arena-chat-view';
+    // Electron can attach a dynamically-created webview at its default 300x150
+    // bounds. Prime explicit frame dimensions, with a 1px height delta so the
+    // post-attach sync forces a real guest resize without a tiny initial viewport.
+    view.style.width = `${Math.max(1, els.chatFrameWrap.clientWidth)}px`;
+    view.style.height = `${Math.max(2, els.chatFrameWrap.clientHeight + 1)}px`;
     view.setAttribute('partition', 'persist:arena-chat');
     view.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=yes');
     view.setAttribute('allowpopups', '');
@@ -404,6 +431,7 @@ function loadArenaChat() {
     attachArenaChatEvents(view);
     arenaChatView = view;
     els.chatFrameWrap.append(view);
+    observeArenaChatBounds(view);
   } catch (error) {
     if (view === arenaChatView) arenaChatView = null;
     failArenaChat(error.message || 'The embedded chat could not be started.');

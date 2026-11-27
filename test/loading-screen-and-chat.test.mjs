@@ -71,6 +71,12 @@ test('embedded arena.ai chat is click-to-load, securely isolated, and retryable 
   assert.match(desktopAppJs, /https:\/\/arena\.ai\//);
   assert.match(desktopAppJs, /function loadArenaChat\(/);
   assert.match(desktopAppJs, /function reloadArenaChat\(/);
+  assert.match(desktopAppJs, /function syncArenaChatBounds\(/);
+  assert.match(desktopAppJs, /function observeArenaChatBounds\(/);
+  assert.match(desktopAppJs, /new ResizeObserver\(\(\) => syncArenaChatBounds\(view\)\)/);
+  assert.match(desktopAppJs, /addEventListener\('did-attach'/);
+  assert.match(desktopAppJs, /els\.chatFrameWrap\.clientHeight/);
+  assert.match(desktopAppJs, /els\.chatFrameWrap\.clientHeight \+ 1/, 'A one-pixel initial height delta should force Electron to resize the attached guest.');
   assert.match(desktopAppJs, /function failArenaChat\(/);
   assert.match(desktopAppJs, /retryArenaChatBtn\?\.addEventListener\('click', \(\) => reloadArenaChat\(\)\)/);
   assert.doesNotMatch(desktopAppJs, /function observeChatVisibility\(/, 'Chat must not start downloading just because it scrolled into view.');

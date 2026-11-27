@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102a66">
-  <meta name="description" content="Arena Local v0.1.9 adds the arena local :3 loading screen, a live what-the-AI-is-asking banner, an embedded arena.ai chat panel, and required explain-then-edit narration from the agent.">
+  <meta name="description" content="Arena Local v0.1.10 fixes the embedded Arena chat viewport so the full page fills its frame after Electron attaches and resizes the guest.">
   <meta property="og:title" content="Updates — Arena Local">
-  <meta property="og:description" content="See what's new in Arena Local v0.1.9, with release dates and direct Windows installer downloads for each version.">
+  <meta property="og:description" content="See what's new in Arena Local v0.1.10, with release dates and direct Windows installer downloads for each version.">
   <title>Updates // Arena Local</title>
   <link rel="canonical" href="https://lumifaye.github.io/ArenaAgent2local/changelog.html">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
@@ -28,14 +28,21 @@
       <main id="main" class="subpage-main">
         <p class="breadcrumb"><a href="./">Home</a><span aria-hidden="true">/</span> Updates</p>
         <section class="page-hero page-hero-compact" aria-labelledby="page-title">
-          <div><p class="eyebrow">RELEASE NOTES / NOVEMBER 27, 2026 UTC</p><h1 id="page-title">Talks back.<br><span>Release notes, ready to install.</span></h1><p>Version 0.1.9 adds the arena local :3 loading screen with a live "what the ai is asking to do" view, an optional embedded arena.ai chat panel, and required explain-then-edit narration from the agent. Dates below match when each release was published.</p><div class="hero-inline-links"><a class="page-button page-button-primary" href="https://github.com/livinginanicebox/ArenaAgent2local-upd/releases/download/v0.1.9/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.9 Windows installer">Download v0.1.9 <span aria-hidden="true">↓</span></a><a class="quiet-link" href="https://github.com/livinginanicebox/ArenaAgent2local-upd/releases/tag/v0.1.9" target="_blank" rel="noopener noreferrer">Open the release ↗</a></div></div>
-          <div class="release-badge"><span>ARENA LOCAL</span><strong>0.1.9</strong><small>DESKTOP UPDATE<br>WINDOWS X64</small></div>
+          <div><p class="eyebrow">RELEASE NOTES / NOVEMBER 25, 2026 UTC</p><h1 id="page-title">Talks back.<br><span>Release notes, ready to install.</span></h1><p>Version 0.1.10 fixes the embedded arena.ai viewport so the full chat page fills its frame after Electron attaches the guest and whenever the window layout changes. Dates below match when each release was published.</p><div class="hero-inline-links"><a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.10/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.10 Windows installer">Download v0.1.10 <span aria-hidden="true">↓</span></a><a class="quiet-link" href="https://github.com/lumifaye/ArenaAgent2local/releases/tag/v0.1.10" target="_blank" rel="noopener noreferrer">Open the release ↗</a></div></div>
+          <div class="release-badge"><span>ARENA LOCAL</span><strong>0.1.10</strong><small>DESKTOP UPDATE<br>WINDOWS X64</small></div>
+        </section>
+
+        <section class="page-section" aria-label="Version 0.1.10 release notes">
+          <article class="changelog-entry"><div class="changelog-marker"><span>0.1.10</span><small>NOV 25, 2026 UTC</small></div><div class="changelog-content">
+            <div class="change-group"><span class="change-label change-fix">FIXED</span><ul><li>Resize the embedded Arena guest to match the visible chat frame immediately after Electron attaches it and whenever the frame changes size, preventing the page from getting stuck at the default 300 × 150 viewport.</li></ul></div>
+            <a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.10/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.10 Windows installer">Download v0.1.10 installer <span aria-hidden="true">↓</span></a>
+          </div></article>
         </section>
 
         <section class="page-section" aria-label="Version 0.1.9 release notes">
           <article class="changelog-entry"><div class="changelog-marker"><span>0.1.9</span><small>NOV 27, 2026 UTC</small></div><div class="changelog-content">
             <div class="change-group"><span class="change-label change-added">ADDED</span><ul><li>Loading splash screen showing <code>arena local :3</code> with the current boot stage, a live "what the ai is asking to do" list, the files it is touching, and a skip button.</li><li>A pinned control-center banner with the same live ask list and file chips, linked to the approval queue — visible whenever Arena has work in flight or waiting on you.</li><li>Optional embedded arena.ai chat panel ("Chat with Arena") that loads only when opened: sandboxed webview, navigation restricted to Arena and its sign-in providers, with reload, open-in-browser, and reset-sign-in controls and an offline fallback.</li><li>Required explain-then-edit narration in the copied Arena setup prompt and the public agent guide: the agent must explain what it is changing and list the exact files before touching them, and summarize the files it touched when done.</li></ul></div>
-            <a class="page-button page-button-primary" href="https://github.com/livinginanicebox/ArenaAgent2local-upd/releases/download/v0.1.9/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.9 Windows installer">Download v0.1.9 installer <span aria-hidden="true">↓</span></a>
+            <a class="page-button page-button-primary" href="https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.9/Arena-Local-Setup.exe" aria-label="Download Arena Local v0.1.9 Windows installer">Download v0.1.9 installer <span aria-hidden="true">↓</span></a>
           </div></article>
         </section>
 
