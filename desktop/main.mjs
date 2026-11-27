@@ -10,26 +10,11 @@ import { listGithubRepositories, normalizeGithubToken, verifyGithubToken } from 
 import { RobloxMcpClient } from '../src/roblox-mcp-client.mjs';
 import { listWorkspace, readWorkspaceFile, resolveWorkspaceRoot } from '../src/workspace.mjs';
 import { assertTrustedUiEvent as assertTrustedDesktopUiEvent } from './trusted-ui.mjs';
+import { ARENA_CHAT_PARTITION, ARENA_CHAT_URL, isArenaChatUrlAllowed } from './arena-chat.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UI_ENTRY_PATH = path.resolve(HERE, '..', 'public', 'index.html');
 const DEFAULT_PERMISSION_MODE = 'ask';
-const ARENA_CHAT_URL = 'https://arena.ai/';
-const ARENA_CHAT_PARTITION = 'persist:arena-chat';
-const ARENA_CHAT_ALLOWED_HOSTS = ['arena.ai', 'lmarena.ai', 'accounts.google.com', 'challenges.cloudflare.com'];
-
-// The embedded chat panel may navigate only to Arena and the sign-in providers
-// it depends on. Anything else stays inside the sandboxed guest or is denied.
-function isArenaChatUrlAllowed(rawUrl) {
-  try {
-    const url = new URL(String(rawUrl));
-    if (url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase();
-    return ARENA_CHAT_ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-  } catch {
-    return false;
-  }
-}
 const FULL_NO_ASK_WARNING = 'you are SERIOUSLY playing with fire right now. please do NOT use this on a main computer and instead ONLY use this on a computer you do NOT care about at all. I\'m serious. like. really serious. PLEASE. LISTEN. this setting is for purely expiermental purposes';
 const FULL_NO_ASK_WAIT_MS = 30_000;
 const FULL_NO_ASK_CHALLENGE_TTL_MS = 3 * 60_000;
@@ -1126,16 +1111,55 @@ function registerIpcHandlers() {
   });
 }
 
+function restrictArenaChatNavigation(contents) {
+  const blockDisallowedUrl = (event, targetUrl) => {
+    if (!isArenaChatUrlAllowed(targetUrl)) event.preventDefault();
+  };
+  contents.on('will-navigate', blockDisallowedUrl);
+  contents.on('will-redirect', blockDisallowedUrl);
+}
+
+function arenaChatPopupOptions() {
+  return {
+    width: 680,
+    height: 760,
+    autoHideMenuBar: true,
+    webPreferences: {
+      partition: ARENA_CHAT_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInWorker: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+    },
+  };
+}
+
+function guardArenaChatWindowContents(contents) {
+  restrictArenaChatNavigation(contents);
+  contents.setWindowOpenHandler(({ url }) => {
+    if (!isArenaChatUrlAllowed(url)) return { action: 'deny' };
+    return { action: 'allow', overrideBrowserWindowOptions: arenaChatPopupOptions() };
+  });
+  contents.on('did-create-window', (childWindow, details) => {
+    childWindow.setMenuBarVisibility(false);
+    if (!isArenaChatUrlAllowed(details.url)) {
+      childWindow.close();
+      return;
+    }
+    guardArenaChatWindowContents(childWindow.webContents);
+  });
+}
+
 function createWindow() {
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
-    // The embedded Arena chat is a plain Chromium view of arena.ai. It never
-    // gets Node access, cannot open new windows, and may only navigate to
-    // Arena and its sign-in providers.
-    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    contents.on('will-navigate', (event, targetUrl) => {
-      if (!isArenaChatUrlAllowed(targetUrl)) event.preventDefault();
-    });
+    // Keep Arena isolated, constrain all guest navigations, and let only
+    // allowlisted sign-in popups open in a separate sandboxed window.
+    guardArenaChatWindowContents(contents);
     contents.on('will-attach-webview', (event) => event.preventDefault());
   });
   mainWindow = new BrowserWindow({
@@ -1159,6 +1183,22 @@ function createWindow() {
   mainWindow.removeMenu();
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+  mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    if (params.partition !== ARENA_CHAT_PARTITION || !isArenaChatUrlAllowed(params.src)) {
+      event.preventDefault();
+      return;
+    }
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.nodeIntegrationInWorker = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+    webPreferences.allowRunningInsecureContent = false;
+    webPreferences.webviewTag = false;
+    params.allowpopups = '';
+  });
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     publishState();

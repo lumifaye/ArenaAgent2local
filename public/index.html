@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; img-src 'self' file: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; img-src 'self' file: data:; frame-src https://arena.ai https://*.arena.ai https://lmarena.ai https://*.lmarena.ai https://google.com https://*.google.com https://challenges.cloudflare.com; object-src https://arena.ai https://*.arena.ai https://lmarena.ai https://*.lmarena.ai https://google.com https://*.google.com https://challenges.cloudflare.com; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102a66">
   <title>Arena Local — Desktop bridge</title>
@@ -144,11 +144,13 @@
               <div class="chat-loading" id="chatLoading" role="status" aria-live="polite" hidden><span class="mini-spinner"></span> Loading arena.ai…</div>
               <div class="chat-fallback" id="chatFallback" hidden>
                 <strong>arena.ai could not load here</strong>
-                <p id="chatFallbackCopy">Check your internet connection, or open the chat in your regular browser instead.</p>
+                <p id="chatFallbackCopy">Check your internet connection, then retry the embedded chat or open it in your regular browser.</p>
+                <button class="secondary-button" id="retryArenaChatBtn" type="button">Retry embedded chat ↻</button>
                 <button class="secondary-button" id="chatFallbackOpenBtn" type="button">Open arena.ai in browser ↗</button>
               </div>
             </div>
             <div class="chat-actions">
+              <button class="secondary-button" id="toggleChatFocusBtn" type="button" aria-controls="chat" aria-pressed="false">Expand chat</button>
               <button class="secondary-button" id="reloadArenaChatBtn" type="button" disabled>Reload chat</button>
               <button class="secondary-button" id="openArenaChatBrowserBtn" type="button">Open in browser ↗</button>
               <button class="text-button" id="resetArenaChatBtn" type="button">Reset sign-in</button>

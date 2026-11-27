@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - 'arena/8393bb53-arenaagent2local'
-      - 'arena/a9cb5374-arenaagent2local-upd'
   release:
     types:
       - published
