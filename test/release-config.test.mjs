@@ -58,7 +58,7 @@ test('desktop app element registry covers all references and matches the HTML', 
 
 test('updates page shows release publication dates and links to versioned installer downloads', () => {
   const releaseDates = {
-    '0.1.14': 'NOV 25, 2026 UTC',
+    '0.1.14': 'NOV 28, 2026 UTC',
     '0.1.13': 'NOV 27, 2026 UTC',
     '0.1.12': 'NOV 27, 2026 UTC',
     '0.1.11': 'NOV 27, 2026 UTC',
@@ -91,7 +91,7 @@ test('current changelog entry is marked released and links to its installer', ()
   assert.notEqual(start, -1);
   const end = changelogPage.indexOf('</section>', start);
   const entry = changelogPage.slice(start, end);
-  assert.ok(entry.includes('<small>NOV 25, 2026 UTC</small>'));
+  assert.ok(entry.includes('<small>NOV 28, 2026 UTC</small>'));
   assert.ok(entry.includes('https://github.com/lumifaye/ArenaAgent2local/releases/download/v0.1.14/Arena-Local-Setup.exe'));
   assert.doesNotMatch(entry, /UNRELEASED/);
   assert.ok(entry.includes('202 Accepted<\/code>'));
