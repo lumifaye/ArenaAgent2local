@@ -150,6 +150,9 @@ test('remote bridge requires its bearer key and supports scoped read requests', 
   const submitted = await postTask(fixture, request);
   assert.equal(submitted.status, 202);
   const queued = await submitted.json();
+  assert.equal(submitted.headers.get('location'), `/v1/tasks/${queued.taskId}`);
+  assert.equal(submitted.headers.get('retry-after'), '1');
+  assert.ok(queued.taskId);
   const completed = await waitForTask(fixture, queued.taskId, (task) => task.status === 'completed');
   assert.equal(completed.result.content, '# Local bridge test\n');
   assert.equal(completed.result.path, 'README.md');
@@ -232,6 +235,9 @@ test('disabling public web tools cancels an in-flight search and prevents its re
   });
   const queued = await response.json();
   assert.equal(queued.status, 'running');
+  const pendingPoll = await readTask(fixture, queued.taskId);
+  assert.equal(pendingPoll.status, 200);
+  assert.equal(pendingPoll.headers.get('retry-after'), '1');
 
   fixture.setWebToolsEnabled(false);
   const cancelled = await waitForTask(fixture, queued.taskId, (task) => task.status === 'cancelled');

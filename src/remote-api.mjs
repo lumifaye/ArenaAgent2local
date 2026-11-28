@@ -45,9 +45,10 @@ class HttpError extends Error {
   }
 }
 
-function sendJson(res, status, payload) {
+function sendJson(res, status, payload, additionalHeaders = {}) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
+    ...additionalHeaders,
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),
     'cache-control': 'no-store, no-cache, must-revalidate',
@@ -838,13 +839,19 @@ export function createRemoteApi({
       const request = validateTaskBody(await readJson(req));
       assertControlActive(requestControlEpoch);
       const task = await createTask(request, requestControlEpoch);
-      return sendJson(res, 202, arenaTaskResponse(task));
+      return sendJson(res, 202, arenaTaskResponse(task), {
+        location: `/v1/tasks/${task.taskId}`,
+        'retry-after': '1',
+      });
     }
     const match = /^\/v1\/tasks\/([a-f0-9-]{36})$/i.exec(url.pathname);
     if (req.method === 'GET' && match) {
       const task = tasks.get(match[1]);
       if (!task) throw new HttpError(404, 'Task not found or expired.');
-      return sendJson(res, 200, arenaTaskResponse(task));
+      const retryHeaders = ['completed', 'denied', 'expired', 'cancelled', 'error'].includes(task.status)
+        ? {}
+        : { 'retry-after': '1' };
+      return sendJson(res, 200, arenaTaskResponse(task), retryHeaders);
     }
     throw new HttpError(404, 'Not found.');
   }

@@ -13,6 +13,8 @@ const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 4;
 const USER_AGENT = 'ArenaLocal-WebTools/1.0';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const HTML_MIME_TYPES = new Set(['text/html', 'application/xhtml+xml']);
+const PLAIN_TEXT_MIME_TYPES = new Set(['text/plain', 'text/markdown', 'text/x-markdown']);
 const BLOCKED_HOST_SUFFIXES = [
   '.localhost', '.local', '.internal', '.test', '.invalid', '.example', '.onion', '.home.arpa', '.arpa',
 ];
@@ -138,7 +140,7 @@ function requestHttps(url, { address, signal, maxBytes }) {
         path: `${url.pathname || '/'}${url.search}`,
         method: 'GET',
         headers: {
-          accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
+          accept: 'text/html,application/xhtml+xml,text/markdown;q=0.95,text/x-markdown;q=0.9,text/plain;q=0.85,*/*;q=0.1',
           'accept-encoding': 'identity',
           'user-agent': USER_AGENT,
           connection: 'close',
@@ -189,8 +191,8 @@ function requestHttps(url, { address, signal, maxBytes }) {
 function safeContentType(headers) {
   const contentType = String(headers?.['content-type'] || '').slice(0, 256);
   const mimeType = contentType.split(';', 1)[0].trim().toLowerCase();
-  if (!['text/html', 'application/xhtml+xml', 'text/plain'].includes(mimeType)) {
-    throw new Error('The requested page did not return HTML or plain text.');
+  if (!HTML_MIME_TYPES.has(mimeType) && !PLAIN_TEXT_MIME_TYPES.has(mimeType)) {
+    throw new Error(`The requested page returned unsupported content type “${mimeType || 'missing'}”; web scraping accepts HTML, Markdown, or plain text.`);
   }
   const encoding = String(headers?.['content-encoding'] || '').trim().toLowerCase();
   if (encoding && encoding !== 'identity') throw new Error('Compressed web responses are not accepted.');
@@ -556,7 +558,7 @@ export async function searchWeb({ query, maxResults = 5 }, options = {}) {
     ...options,
     maxBytes: MAX_SEARCH_RESPONSE_BYTES,
   });
-  if (page.mimeType !== 'text/html' && page.mimeType !== 'application/xhtml+xml') {
+  if (!HTML_MIME_TYPES.has(page.mimeType)) {
     throw new Error('DuckDuckGo did not return an HTML search results page.');
   }
   const html = decodeBody(page.body, page.contentType);
@@ -579,7 +581,7 @@ export async function scrapeWeb({ url }, options = {}) {
     maxBytes: MAX_SCRAPE_RESPONSE_BYTES,
   });
   const rawText = decodeBody(page.body, page.contentType);
-  if (page.mimeType === 'text/plain') {
+  if (PLAIN_TEXT_MIME_TYPES.has(page.mimeType)) {
     const extracted = plainTextToText(rawText, MAX_SCRAPED_TEXT_CHARS);
     return {
       url: page.url,

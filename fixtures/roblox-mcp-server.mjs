@@ -19,38 +19,44 @@ function handle(message) {
     return;
   }
   if (message.method === 'tools/list') {
-    send({
-      jsonrpc: '2.0',
-      id: message.id,
-      result: {
-        tools: [
-          {
-            name: 'script_read',
-            description: 'Read a script in an open Studio place.',
-            inputSchema: {
-              type: 'object',
-              properties: { studio_id: { type: 'string' }, script_path: { type: 'string' } },
-              required: ['studio_id', 'script_path'],
-            },
-            annotations: { readOnlyHint: true },
-          },
-          {
-            name: 'execute_luau',
-            description: 'Run Luau in an open Studio place.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                studio_id: { type: 'string' },
-                code: { type: 'string' },
-                datamodel_type: { type: 'string', enum: ['Edit', 'Client', 'Server'] },
-              },
-              required: ['studio_id', 'code', 'datamodel_type'],
-            },
-            annotations: { readOnlyHint: true },
-          },
-        ],
+    const pageCount = Number.parseInt(process.env.ROBLOX_MCP_TOOL_PAGES || '1', 10);
+    const pageIndex = message.params?.cursor === undefined ? 0 : Number(message.params.cursor);
+    const tools = pageIndex === 0 ? [
+      {
+        name: 'script_read',
+        description: 'Read a script in an open Studio place.',
+        inputSchema: {
+          type: 'object',
+          properties: { studio_id: { type: 'string' }, script_path: { type: 'string' } },
+          required: ['studio_id', 'script_path'],
+        },
+        annotations: { readOnlyHint: true },
       },
-    });
+      {
+        name: 'execute_luau',
+        description: 'Run Luau in an open Studio place.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            studio_id: { type: 'string' },
+            code: { type: 'string' },
+            datamodel_type: { type: 'string', enum: ['Edit', 'Client', 'Server'] },
+          },
+          required: ['studio_id', 'code', 'datamodel_type'],
+        },
+        annotations: { readOnlyHint: true },
+      },
+    ] : [];
+    if (process.env.ROBLOX_MCP_TOOL_PAGES) {
+      tools.push({
+        name: `fixture_paged_tool_${pageIndex}`,
+        description: `Fixture tool on page ${pageIndex}.`,
+        inputSchema: { type: 'object', properties: {} },
+      });
+    }
+    const result = { tools };
+    if (Number.isInteger(pageIndex) && pageIndex + 1 < pageCount) result.nextCursor = String(pageIndex + 1);
+    send({ jsonrpc: '2.0', id: message.id, result });
     return;
   }
   if (message.method === 'tools/call') {

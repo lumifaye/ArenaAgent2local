@@ -183,6 +183,30 @@ test('plain-text pages preserve markup-like characters and report bounded charac
   assert.equal(result.truncated, true);
 });
 
+test('Markdown content types are treated as bounded plain text', async () => {
+  const source = '# Creator Hub API\n\nUse `StudioService` in Edit mode.\n\n- Read scripts\n- Inspect instances';
+  for (const mimeType of ['text/markdown', 'text/x-markdown']) {
+    const result = await scrapeWeb({ url: 'https://example.com/reference.md' }, {
+      resolver: async () => [{ address: PUBLIC_IP, family: 4 }],
+      requester: async () => fakeResponse(source, { 'content-type': `${mimeType}; charset=utf-8` }),
+    });
+    assert.equal(result.contentType, `${mimeType}; charset=utf-8`);
+    assert.equal(result.title, '');
+    assert.equal(result.description, '');
+    assert.equal(result.text, source);
+    assert.equal(result.charCount, source.length);
+    assert.equal(result.truncated, false);
+    assert.match(result.note, /untrusted/i);
+  }
+});
+
+test('web scraper still rejects binary responses and reports their content type', async () => {
+  await assert.rejects(scrapeWeb({ url: 'https://example.com/reference.md' }, {
+    resolver: async () => [{ address: PUBLIC_IP, family: 4 }],
+    requester: async () => fakeResponse('not treated as markdown', { 'content-type': 'application/octet-stream' }),
+  }), /unsupported content type.*application\/octet-stream/i);
+});
+
 test('malformed oversized HTML is scanned without leaking script text or hanging on repeated tags', async () => {
   const hostileHtml = `${'<script>'.repeat(30_000)}untrusted script content`;
   const result = await scrapeWeb({ url: 'https://example.com/malformed' }, {

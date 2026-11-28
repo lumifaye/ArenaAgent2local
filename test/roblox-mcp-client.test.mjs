@@ -66,6 +66,29 @@ test('Roblox MCP client connects over stdio, discovers tools, calls them, and di
   assert.equal(client.getState().toolCount, 0);
 });
 
+test('Roblox MCP client discovers all tools across more than 16 paginated pages', async (t) => {
+  const client = new RobloxMcpClient({
+    clientInfo: { name: 'arena-local-pagination-test', version: '1.0.0' },
+    launchConfig: {
+      command: process.execPath,
+      args: [FIXTURE],
+      env: { ROBLOX_MCP_TOOL_PAGES: '20' },
+    },
+  });
+  t.after(async () => client.disconnect());
+
+  const state = await client.connect();
+  assert.equal(state.status, 'connected');
+  assert.equal(state.toolCount, 22);
+  const tools = client.getTools();
+  const names = new Set(tools.map((tool) => tool.name));
+  assert.ok(names.has('script_read'));
+  assert.ok(names.has('execute_luau'));
+  assert.ok(names.has('fixture_paged_tool_0'));
+  assert.ok(names.has('fixture_paged_tool_19'));
+  assert.equal([...names].filter((name) => name.startsWith('fixture_paged_tool_')).length, 20);
+});
+
 test('an unexpected Studio process exit clears tools and publishes a disconnected error', async (t) => {
   const client = new RobloxMcpClient({
     clientInfo: { name: 'arena-local-disconnect-test', version: '1.0.0' },

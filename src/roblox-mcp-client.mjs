@@ -8,6 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 const CONNECT_TIMEOUT_MS = 30_000;
 const TOOL_CALL_TIMEOUT_MS = 10 * 60_000;
 const MAX_TOOL_DESCRIPTION_LENGTH = 10_000;
+const MAX_TOOL_LIST_PAGES = 64;
 
 // Read-only names from Roblox's documented built-in Studio MCP tool set. Only
 // these known operations are available in Read only mode; new/unknown tools
@@ -100,7 +101,7 @@ export class RobloxMcpClient {
     clientInfo = { name: 'arena-local', version: '0.0.0' },
     onState = () => {},
     launchConfig = getRobloxMcpLaunchConfig(),
-    clientFactory = (info) => new Client(info, { versionNegotiation: { mode: 'legacy' }, listMaxPages: 16 }),
+    clientFactory = (info) => new Client(info, { versionNegotiation: { mode: 'legacy' }, listMaxPages: MAX_TOOL_LIST_PAGES }),
     transportFactory = (config) => new StdioClientTransport({ ...config, stderr: 'pipe', maxBufferSize: 16 * 1024 * 1024 }),
   } = {}) {
     this.clientInfo = clientInfo;
@@ -248,6 +249,7 @@ export class RobloxMcpClient {
       throw new Error('Roblox Studio MCP is not connected.');
     }
     const response = await this.client.listTools(undefined, {
+      cacheMode: 'refresh',
       timeout: CONNECT_TIMEOUT_MS,
       maxTotalTimeout: CONNECT_TIMEOUT_MS,
     });
